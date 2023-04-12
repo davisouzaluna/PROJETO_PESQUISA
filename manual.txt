@@ -1,0 +1,2 @@
+Deverá existir um broker configurado para receber essas configurações 
+udp e QUIC para existir uma comunicação
