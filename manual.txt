@@ -1,2 +1,7 @@
 Deverá existir um broker configurado para receber essas configurações 
 udp e QUIC para existir uma comunicação
+
+sites dos certificados: https://test.mosquitto.org/ssl/ 
+
+
+O certificado digital(crt) é gerado ao colar o chave.csr no link acima.

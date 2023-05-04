@@ -1,0 +1,4 @@
+[ZoneTransfer]
+ZoneId=3
+ReferrerUrl=https://test.mosquitto.org/ssl/index.php
+HostUrl=https://test.mosquitto.org/ssl/index.php
