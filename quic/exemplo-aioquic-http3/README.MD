@@ -26,7 +26,10 @@ To run the server, follow these steps:
 ```cl 
 bash server-execucao.sh 
 ```
-4.In another terminal window, type:
+
+## Client
+
+In another terminal window(after you start the server correctly), type:
 
 ```cl
 bash client-execucao.sh
