@@ -9,7 +9,11 @@ Before running the server and client, make sure you have the following:
 - Python 3 installed
 - aioquic library installed (you can install it using `pip install aioquic`)
 
-If you don't have these dependencesm you can execute the archive
+If you don't have these dependences you can execute the archive
+
+```cl 
+bash verificacao.sh 
+```
 
 ## Server
 
