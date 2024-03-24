@@ -18,56 +18,6 @@
         <a href="../../index.html" class="button">Página inicial</a>
     </div>
 
-    <script>
-        // Função para carregar documentos de um diretório de mês em um ano específico
-        function loadDocumentsForYear(year) {
-            const months = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
-            const documentsContainer = document.getElementById('documents');
-            documentsContainer.innerHTML = ''; // Limpa o conteúdo anterior
-            
-            months.forEach(month => {
-                fetch(`${year}/${month}/documents.json`) // Carrega o arquivo JSON com os documentos do mês
-                    .then(response => response.json())
-                    .then(data => {
-                        const documents = data.documents;
-                        // Verifica se há documentos para o mês atual
-                        if (documents.length > 0) {
-                            // Adiciona o nome do mês como título
-                            documentsContainer.innerHTML += `<h2>${month}</h2>`;
-                            // Cria uma lista para os documentos do mês
-                            documentsContainer.innerHTML += '<ul>';
-                            documents.forEach(document => {
-                                // Adiciona um link para o documento e um contêiner para o conteúdo do documento
-                                documentsContainer.innerHTML += `<li><a href="#" onclick="loadDocument('${year}/${month}/${document.filename}'); return false;">${document.name}</a></li>`;
-                            });
-                            documentsContainer.innerHTML += '</ul>'; // Fecha a lista
-                        }
-                    })
-                    .catch(error => {
-                        console.error(`Erro ao carregar documentos do mês ${month} de ${year}:`, error);
-                    });
-            });
-        }
-
-        function loadDocument(filePath) {
-            fetch(filePath)
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error(`Erro ao carregar o documento: ${response.statusText}`);
-                    }
-                    return response.arrayBuffer();
-                })
-                .then(arrayBuffer => {
-                    const uint8Array = new Uint8Array(arrayBuffer);
-                    return mammoth.convertToHtml({ arrayBuffer: uint8Array });
-                })
-                .then(result => {
-                    document.getElementById('documentContent').innerHTML = result.value;
-                })
-                .catch(error => {
-                    console.error('Erro ao carregar o documento:', error);
-                });
-        }
-    </script>
+    <script src="script.js"></script>
 </body>
 </html>

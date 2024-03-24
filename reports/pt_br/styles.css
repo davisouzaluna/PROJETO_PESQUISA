@@ -63,3 +63,7 @@ html, body, div, span, h1, h2, h3, h4, h5, h6, p, a, img, ul, ol, li, header, ma
     background-color: #0056b3;
   }
   
+  .download-text {
+    color: red; /* Cor do texto do link de download */
+    margin-left: 8px; /* Espaçamento à esquerda */
+}
