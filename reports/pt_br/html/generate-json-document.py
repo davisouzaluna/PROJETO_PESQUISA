@@ -1,8 +1,8 @@
 import os
 import json
 
-#gerador de jSON para documentos
-#Esse script deve ser executado toda vez que um novo arquivo ou  diretorio for adicionado, para atualizar a lista de documentos
+# Gerador de JSON para documentos
+# Este script deve ser executado sempre que um novo arquivo ou diretório for adicionado, para atualizar a lista de documentos
 def generate_documents_json(month_directory):
     documents = []
     for filename in os.listdir(month_directory):
@@ -23,10 +23,12 @@ def generate_documents_for_year(year_directory):
                 json.dump(documents_json, file, indent=4)
             print(f"Arquivo documents.json gerado para {year_directory}/{month}")
 
+# Diretório principal onde os diretórios dos anos estão localizados
+main_directory = "reports/pt_br"
+
 # Diretórios dos anos
-years_directories = ["reports/pt_br/2023", "reports/pt_br/2024"]
+years_directories = [os.path.join(main_directory, year) for year in os.listdir(main_directory) if os.path.isdir(os.path.join(main_directory, year))]
 
 # Gera os arquivos documents.json para cada ano
 for year_directory in years_directories:
-    year_path = os.path.join(os.getcwd(), year_directory)
-    generate_documents_for_year(year_path)
+    generate_documents_for_year(year_directory)
