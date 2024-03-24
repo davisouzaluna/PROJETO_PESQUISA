@@ -1,1 +1,0 @@
-python3 ./server.py --certificate certificate.pem --private-key private_key.pem

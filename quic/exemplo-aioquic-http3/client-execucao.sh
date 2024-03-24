@@ -1,1 +1,0 @@
-python3 client.py --ca-certs certificate.pem https://localhost:4433/
