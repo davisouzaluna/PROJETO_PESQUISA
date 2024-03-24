@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document Viewer</title>
+    <link rel="stylesheet" href="./styles.css">
+    <!--mammoth.js-->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.4/mammoth.browser.min.js"></script>
+</head>
+<body>
+    <h1>Documentos</h1>
+    <div id="documents"></div>
+    <div>
+        <button onclick="loadDocumentsForYear('2023')">2023</button>
+        <button onclick="loadDocumentsForYear('2024')">2024</button>
+        <a href="../../index.html" class="button">Página inicial</a>
+    </div>
+
+    <script>
+        // Função para carregar documentos de um diretório de mês em um ano específico
+        function loadDocumentsForYear(year) {
+            const months = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+            const documentsContainer = document.getElementById('documents');
+            documentsContainer.innerHTML = ''; // Limpa o conteúdo anterior
+            
+            months.forEach(month => {
+                fetch(`${year}/${month}/documents.json`) // Carrega o arquivo JSON com os documentos do mês
+                    .then(response => response.json())
+                    .then(data => {
+                        const documents = data.documents;
+                        // Verifica se há documentos para o mês atual
+                        if (documents.length > 0) {
+                            // Adiciona o nome do mês como título
+                            documentsContainer.innerHTML += `<h2>${month}</h2>`;
+                            // Cria uma lista para os documentos do mês
+                            documentsContainer.innerHTML += '<ul>';
+                            documents.forEach(document => {
+                                const documentLink = `<a href="${year}/${month}/${document.filename}">${document.name}</a>`;
+                                // Adiciona cada documento como um item da lista
+                                documentsContainer.innerHTML += `<li>${documentLink}</li>`;
+                            });
+                            documentsContainer.innerHTML += '</ul>'; // Fecha a lista
+                        }
+                    })
+                    .catch(error => {
+                        console.error(`Erro ao carregar documentos do mês ${month} de ${year}:`, error);
+                    });
+            });
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,73 @@
+/* Reset de estilos */
+html, body, div, span, h1, h2, h3, h4, h5, h6, p, a, img, ul, ol, li, header, main, section, footer {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  font-size: 100%;
+  font: inherit;
+  vertical-align: baseline;
+}
+
+/* Estilos gerais */
+body {
+  font-family: Arial, sans-serif;
+  background-color: #f8f8f8;
+}
+
+.container {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+h1{
+  text-align: center;
+  margin-bottom: 20px;
+  color: #333;
+  font-size: 24px;
+  font-weight: bold;
+
+}
+
+.title {
+  text-align: center;
+  margin-bottom: 20px;
+  color: #333;
+}
+
+.button-section {
+  margin-bottom: 40px;
+}
+
+.section-title {
+  font-size: 1.2em;
+  margin-bottom: 10px;
+  color: #666;
+
+}
+
+.button-container {
+  display: flex;
+  justify-content: center;
+}
+
+.button {
+  display: inline-block;
+  padding: 10px 20px;
+  margin: 0 10px;
+  text-decoration: none;
+  background-color: #007bff;
+  color: #fff;
+  border-radius: 5px;
+  transition: background-color 0.3s;
+}
+
+.button:hover {
+  background-color: #0056b3;
+}
+
+.footer-text {
+  text-align: center;
+  color: #666;
+  margin-top: 40px;
+}
