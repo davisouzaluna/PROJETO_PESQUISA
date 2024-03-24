@@ -22,6 +22,11 @@ html, body, div, span, h1, h2, h3, h4, h5, h6, p, a, img, ul, ol, li, header, ma
     font-weight: bold; /* Negrito */
   }
   
+  h2 {
+    font-size: 20px; /* Tamanho grande */
+    font-weight: bold; /* Negrito */
+  }
+  
   #documents {
     max-width: 800px;
     margin: 0 auto;
