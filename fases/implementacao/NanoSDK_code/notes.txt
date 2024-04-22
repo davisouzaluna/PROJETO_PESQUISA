@@ -1,0 +1,5 @@
+Is necessary to install hiredis librar by source code and install in the project:
+
+
+
+
