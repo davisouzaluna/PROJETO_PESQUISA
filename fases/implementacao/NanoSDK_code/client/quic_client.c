@@ -1,13 +1,3 @@
-// Author: wangha <wangwei at emqx dot io>
-//
-// This software is supplied under the terms of the MIT License, a
-// copy of which should be located in the distribution where this
-// file was obtained (LICENSE.txt).  A copy of the license may also be
-// found online at https://opensource.org/licenses/MIT.
-//
-
-//
-// This is just a simple MQTT client demonstration application.
 //
 // The application has three sub-commands: `conn` `pub` and `sub`.
 // The `conn` sub-command connects to the server.
@@ -38,12 +28,21 @@
 #include <nng/mqtt/mqtt_quic.h>
 #include <nng/mqtt/mqtt_client.h>
 #include <hiredis/hiredis.h>
+#include <time.h>
+#include <sys/time.h>
 
 #include "msquic.h"
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
+#define MAX_STR_LEN 30
+#ifndef CLOCK_REALTIME
+#define CLOCK_REALTIME 0
+#endif
+
+#define BILLION 1000000000
 #define CONN 1
 #define SUB 2
 #define PUB 3
@@ -101,6 +100,73 @@ static void
 fatal(const char *msg, int rv)
 {
 	fprintf(stderr, "%s: %s\n", msg, nng_strerror(rv));
+}
+
+struct timespec string_para_timespec(char *tempo_varchar) {
+    struct timespec tempo;
+    char *ponto = strchr(tempo_varchar, '.');
+    if (ponto != NULL) {
+        *ponto = '\0'; // separa os segundos dos nanossegundos
+        tempo.tv_sec = atol(tempo_varchar);
+        tempo.tv_nsec = atol(ponto + 1);
+    } else {
+        tempo.tv_sec = atol(tempo_varchar);
+        tempo.tv_nsec = 0;
+    }
+    return tempo;
+}
+
+long long tempo_atual_nanossegundos() {
+    struct timespec tempo_atual;
+    clock_gettime(CLOCK_REALTIME, &tempo_atual);
+
+    // Converter segundos para nanossegundos e adicionar nanossegundos
+
+
+return tempo_atual.tv_sec * BILLION + tempo_atual.tv_nsec;
+}
+
+struct timespec tempo_atual_timespec() {
+    struct timespec tempo_atual;
+    clock_gettime(CLOCK_REALTIME, &tempo_atual);
+
+    return tempo_atual;
+}
+
+
+char *tempo_para_varchar() {
+    struct timespec tempo_atual;
+    clock_gettime(CLOCK_REALTIME, &tempo_atual);
+    
+    // Convertendo o tempo para uma string legível
+    char *tempo_varchar = (char *)malloc(MAX_STR_LEN * sizeof(char));
+    if (tempo_varchar == NULL) {
+        perror("Erro ao alocar memória");
+        exit(EXIT_FAILURE);
+    }
+
+    snprintf(tempo_varchar, MAX_STR_LEN, "%ld.%09ld", tempo_atual.tv_sec, tempo_atual.tv_nsec);
+
+    // Retornando a string de tempo
+    return tempo_varchar;
+}
+
+// Função para calcular a diferença entre dois tempos em nanossegundos
+long long diferenca_tempo(struct timespec tempo1, struct timespec tempo2) {
+    long long diff_sec = (long long)(tempo1.tv_sec - tempo2.tv_sec);
+    long long diff_nsec = (long long)(tempo1.tv_nsec - tempo2.tv_nsec);
+    return diff_sec * 1000000000LL + diff_nsec;
+}
+
+// Função para converter diferença de tempo em string
+char *diferenca_para_varchar(long long diferenca) {
+    char *tempo_varchar = (char *)malloc(MAX_STR_LEN * sizeof(char));
+    if (tempo_varchar == NULL) {
+        perror("Erro ao alocar memória");
+        exit(EXIT_FAILURE);
+    }
+    snprintf(tempo_varchar, MAX_STR_LEN, "%lld.%09lld", diferenca / 1000000000LL, diferenca % 1000000000LL);
+    return tempo_varchar;
 }
 
 static nng_msg *
@@ -168,7 +234,9 @@ msg_send_cb(void *rmsg, void * arg)
 
 static int
 msg_recv_cb(void *rmsg, void * arg)
-{
+{	
+	struct timespec tempo_sub;
+	tempo_sub = tempo_atual_timespec();
 	printf("[Msg Arrived][%s]...\n", (char *)arg);
 	nng_msg *msg = rmsg;
 	uint32_t topicsz, payloadsz;
@@ -176,9 +244,17 @@ msg_recv_cb(void *rmsg, void * arg)
 	char *topic   = (char *)nng_mqtt_msg_get_publish_topic(msg, &topicsz);
 	char *payload = (char *)nng_mqtt_msg_get_publish_payload(msg, &payloadsz);
 
+	struct timespec tempo_pub;
+	long long diferenca;
+	tempo_pub = string_para_timespec(payload);
+	diferenca = diferenca_tempo(tempo_sub, tempo_pub);//tempo do sub é o mais recente
+	char *valor_redis;
+	valor_redis = diferenca_para_varchar(diferenca);
+
+   
 	printf("topic   => %.*s\n"
 	       "payload => %.*s\n",topicsz, topic, payloadsz, payload);
-	store_in_redis(payload);
+	store_in_redis(valor_redis);
 	return 0;
 	
 }

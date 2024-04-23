@@ -1,4 +1,4 @@
-// Inclua os headers necessários
+//#define _POSIX_C_SOURCE 199309L
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -9,6 +9,13 @@
 #include <nng/mqtt/mqtt_client.h>
 #include <nng/mqtt/mqtt_quic.h>
 #include "msquic.h"
+
+#include <time.h>
+
+#define MAX_STR_LEN 30
+#ifndef CLOCK_REALTIME
+#define CLOCK_REALTIME 0
+#endif
 
 static nng_socket * g_sock;
 #define CONN 1
@@ -100,10 +107,51 @@ mqtt_msg_compose(int type, int qos, char *topic, char *payload)
 	return msg;
 }
 
+/*
+static char* timenow() {
+#include <time.h>//teste de biblioteca
 
+struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC_RAW, &ts); // Você pode mudar para CLOCK_REALTIME se preferir
+    int sz;
 
+    // Calcula o tamanho necessário da string
+    sz = snprintf(NULL, 0, "%ld", ts.tv_nsec);
+
+    // Aloca memória para a string
+    char *data = (char *)malloc(sz + 1); // Adiciona 1 para o caractere nulo de terminação
+
+    if (data == NULL) {
+        fprintf(stderr, "Erro ao alocar memória.\n");
+        return NULL;
+    }
+
+    // Converte o valor de ts.tv_nsec para uma string de caracteres(debuug)
+    snprintf(data, sz + 1, "%ld", ts.tv_nsec);
+
+    return data;
+}
+*/
+
+// Função para obter o tempo atual e convertê-lo em uma string
+char *tempo_para_varchar() {
+    struct timespec tempo_atual;
+    clock_gettime(CLOCK_REALTIME, &tempo_atual);
+    
+    // Convertendo o tempo para uma string legível
+    char *tempo_varchar = (char *)malloc(MAX_STR_LEN * sizeof(char));
+    if (tempo_varchar == NULL) {
+        perror("Erro ao alocar memória");
+        exit(EXIT_FAILURE);
+    }
+	//calcula o tamanho necessário
+    snprintf(tempo_varchar, MAX_STR_LEN, "%ld.%09ld", tempo_atual.tv_sec, tempo_atual.tv_nsec);
+
+    // Retornando a string de tempo
+    return tempo_varchar;
+}
 int
-client(int type, const char *url, const char *qos, const char *topic, const char *data, const char *numero_pub)
+client(int type, const char *url, const char *qos, const char *topic, const char *numero_pub)
 {
 	nng_socket  sock;
 	int         rv, sz, q, qpub, i;
@@ -145,8 +193,28 @@ client(int type, const char *url, const char *qos, const char *topic, const char
 
 		qpub = atoi(numero_pub);
 		for(i=0;i<qpub;i++){
-		msg = mqtt_msg_compose(PUB, q, (char *)topic, (char *)data);
-		nng_sendmsg(*g_sock, msg, NNG_FLAG_ALLOC);
+		/*
+		If data is NULL, the payload is the time in ns.
+		*/
+		
+			/*
+			struct timespec ts;
+			clock_gettime(CLOCK_MONOTONIC_RAW, &ts);//Posso alterar essa variável para CLOCK_REALTIME
+			sz = snprintf(data, 128, "%ld", ts.tv_nsec);
+			*/
+			//data = timenow();
+			//printf("Data: %s\n", data);
+			
+		
+
+		char *tempo_atual_varchar = tempo_para_varchar();
+			msg = mqtt_msg_compose(PUB, q, (char *)topic, tempo_atual_varchar);
+			printf("Tempo atual em varchar: %s\n", tempo_atual_varchar);
+			nng_sendmsg(*g_sock, msg, NNG_FLAG_ALLOC);
+				
+		//msg = mqtt_msg_compose(PUB, q, (char *)topic, (char *)data);
+		//nng_sendmsg(*g_sock, msg, NNG_FLAG_ALLOC);
+		
 		}
 	}else{
 		msg = mqtt_msg_compose(SUB, q, (char *)topic, NULL);
@@ -162,7 +230,7 @@ client(int type, const char *url, const char *qos, const char *topic, const char
 #endif
 
         	
-	nng_msleep(10);
+	nng_msleep(0);
 	nng_close(sock);
 	fprintf(stderr, "Done.\n");
 
@@ -174,6 +242,7 @@ static void
 printf_helper(char *exec)
 {
 	fprintf(stderr, "Usage: %s <url> <qos> <topic> <data>\n", exec);
+	//fprintf(stderr, "Usage: %s <url> <qos> <topic>\n", exec);
 	exit(EXIT_FAILURE);
 }
 
@@ -181,7 +250,8 @@ int main(int argc, char **argv) {
     if (argc < 4) {
         goto error;
     }
-    client(PUB, argv[1], argv[2], argv[3], argv[4], argv[5]);
+    //client(PUB, argv[1], argv[2], argv[3], argv[4], argv[5]);
+	client(PUB, argv[1], argv[2], argv[3], argv[4]);
     
     return 0;
 
