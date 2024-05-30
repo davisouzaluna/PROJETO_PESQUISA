@@ -1,3 +1,4 @@
+// Inclua os headers necessários
 //#define _POSIX_C_SOURCE 199309L
 #include <stdio.h>
 #include <stdlib.h>
@@ -109,7 +110,7 @@ mqtt_msg_compose(int type, int qos, char *topic, char *payload)
 
 /*
 static char* timenow() {
-#include <time.h>//teste de biblioteca
+#include <time.h>
 
 struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC_RAW, &ts); // Você pode mudar para CLOCK_REALTIME se preferir
@@ -126,7 +127,7 @@ struct timespec ts;
         return NULL;
     }
 
-    // Converte o valor de ts.tv_nsec para uma string de caracteres(debuug)
+    // Converte o valor de ts.tv_nsec para uma string de caracteres
     snprintf(data, sz + 1, "%ld", ts.tv_nsec);
 
     return data;
@@ -144,7 +145,7 @@ char *tempo_para_varchar() {
         perror("Erro ao alocar memória");
         exit(EXIT_FAILURE);
     }
-	//calcula o tamanho necessário
+
     snprintf(tempo_varchar, MAX_STR_LEN, "%ld.%09ld", tempo_atual.tv_sec, tempo_atual.tv_nsec);
 
     // Retornando a string de tempo
@@ -251,7 +252,7 @@ int main(int argc, char **argv) {
         goto error;
     }
     //client(PUB, argv[1], argv[2], argv[3], argv[4], argv[5]);
-	client(PUB, argv[1], argv[2], argv[3], argv[4]);
+	client(PUB, argv[2], argv[3], argv[4], argv[5]);//Adicionei o argv[5] para passar o número de publicações
     
     return 0;
 
