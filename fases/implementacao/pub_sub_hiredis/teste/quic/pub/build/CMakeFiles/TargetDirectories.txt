@@ -1,0 +1,3 @@
+/home/davi/PROJETO_PESQUISA/fases/implementacao/pub_sub_hiredis/teste/pub/build/CMakeFiles/publisher.dir
+/home/davi/PROJETO_PESQUISA/fases/implementacao/pub_sub_hiredis/teste/pub/build/CMakeFiles/edit_cache.dir
+/home/davi/PROJETO_PESQUISA/fases/implementacao/pub_sub_hiredis/teste/pub/build/CMakeFiles/rebuild_cache.dir
