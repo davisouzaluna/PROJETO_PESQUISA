@@ -39,9 +39,9 @@
 #define BILLION 1000000000
 #define CONN 1
 #define SUB 2
-#define PUB 3
 
 static nng_socket * g_sock;
+const char * g_redis_key; //chave padrao para salvar no redis
 
 conf_quic config_user = {
 	.tls = {
@@ -61,8 +61,8 @@ conf_quic config_user = {
 	.qidle_timeout = 30,
 };
 
-void store_in_redis(const char *value) {
-    // Conectar ao servidor Redis na porta 6379(nem sei se é padrão)
+void store_in_redis(const char *value, const char *redis_key) {
+    // Conectar ao servidor Redis na porta 6379 (padrão)
     redisContext *context = redisConnect("127.0.0.1", 6379);
     if (context == NULL || context->err) {
         if (context) {
@@ -76,9 +76,9 @@ void store_in_redis(const char *value) {
 
     printf("Conectado ao servidor Redis\n");
 
-
-    // Salvar o valor no Redis com a chave valores
-    redisReply *reply = redisCommand(context, "RPUSH valores \"%s\"", value);
+    // Salvar o valor no Redis com a chave fornecida ou "valores" como padrão
+    const char *key = redis_key && *redis_key ? redis_key : "valores";
+    redisReply *reply = redisCommand(context, "RPUSH %s \"%s\"", key, value);
     if (reply == NULL) {
         printf("Erro ao salvar os dados no Redis\n");
         redisFree(context);
@@ -90,6 +90,7 @@ void store_in_redis(const char *value) {
     // Encerrar a conexão com o servidor Redis
     redisFree(context);
 }
+
 
 static void
 fatal(const char *msg, int rv)
@@ -244,7 +245,7 @@ msg_recv_cb(void *rmsg, void * arg)
    
 	printf("topic   => %.*s\n"
 	       "payload => %.*s\n",topicsz, topic, payloadsz, payload);
-	store_in_redis(valor_redis);
+	store_in_redis(valor_redis, g_redis_key);
 	return 0;
 	
 }
@@ -253,7 +254,7 @@ msg_recv_cb(void *rmsg, void * arg)
 
 
 int
-client(int type, const char *url, const char *qos, const char *topic)
+client(int type, const char *url, const char *qos, const char *topic, const char *redis_key)
 {
 	nng_socket  sock;
 	int         rv, sz, q;
@@ -296,6 +297,7 @@ client(int type, const char *url, const char *qos, const char *topic)
 	case CONN:
 		break;
 	case SUB:
+        g_redis_key= redis_key; //aqui eu defino o valor da variavel global para que o callback possa acessar
 		msg = mqtt_msg_compose(SUB, q, (char *)topic);
 		nng_sendmsg(*g_sock, msg, NNG_FLAG_ALLOC);
 
@@ -318,8 +320,8 @@ client(int type, const char *url, const char *qos, const char *topic)
 static void
 printf_helper(char *exec)
 {
-	fprintf(stderr, "Usage: %s conn <url>\n"
-	                "       %s sub  <url> <qos> <topic>\n", exec, exec);
+    fprintf(stderr, "Uso: %s conn <url>\n"
+                    "     %s sub  <url> <qos> <topic> [<redis_key>]\n", exec, exec);
 	exit(EXIT_FAILURE);
 }
 
@@ -332,13 +334,13 @@ main(int argc, char **argv)
 		goto error;
 	}
 	if (0 == strncmp(argv[1], "conn", 4) && argc == 3) {
-		client(CONN, argv[2], NULL, NULL);
+		client(CONN, argv[2], NULL, NULL,NULL);
 	}
-	else if (0 == strncmp(argv[1], "sub", 3)  && argc == 5) {
-		client(SUB, argv[2], argv[3], argv[4]);
+	else if (strncmp(argv[1], "sub", 3) == 0 && argc >= 5 && argc <= 6) {
+        const char *redis_key = argc == 6 ? argv[5] : NULL; // Se o argumento opcional do Redis key for fornecido
+        return client(SUB, argv[2], argv[3], argv[4], redis_key); // Chamada para comando de subscrição
 	}
-	
-	else {
+    else {
 		goto error;
 	}
 
