@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  nanosdk-builder1:
+    container_name: nanosdk-builder1
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - .:/NanoSDK
+    ports:
+      - "8080:8080"
+    tty: true
+    stdin_open: true
+    depends_on:
+      - redis
+    networks:
+      - research-net
+
+  nanosdk-builder2:
+    container_name: nanosdk-builder2
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - .:/NanoSDK
+    ports:
+      - "8081:8080"
+    tty: true
+    stdin_open: true
+    depends_on:
+      - redis
+    networks:
+      - research-net
+
+  redis:
+    image: "redis:latest"
+    container_name: redis
+    ports:
+      - "6379:6379"
+    networks:
+      - research-net
+
+networks:
+  research-net:
+    driver: bridge

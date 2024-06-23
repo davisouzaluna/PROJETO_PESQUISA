@@ -20,6 +20,7 @@ RUN git clone https://github.com/emqx/NanoSDK && \
     mkdir build && \
     cd build && \
     cmake -G Ninja -DBUILD_SHARED_LIBS=OFF -DNNG_ENABLE_QUIC=ON ..
+    
 
 # Defiindo o workdir
 WORKDIR /NanoSDK/build
