@@ -3,7 +3,6 @@
 // ```
 // $ ./publisher "mqtt-quic://127.0.0.1:14567" 0 topic 1000
 
-// Inclua os headers necessários
 //#define _POSIX_C_SOURCE 199309L
 #include <stdio.h>
 #include <stdlib.h>

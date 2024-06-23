@@ -1,5 +1,6 @@
 {
     "files.associations": {
-        "mqtt_client.h": "c"
+        "mqtt_client.h": "c",
+        "string.h": "c"
     }
 }

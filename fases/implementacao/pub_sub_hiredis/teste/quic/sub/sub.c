@@ -1,5 +1,5 @@
 //
-// The application has three sub-commands: `conn`and `sub`.
+// The application has two sub-commands: `conn` and `sub`.
 // The `conn` sub-command connects to the server.
 // The `sub` sub-command subscribes to the given topic filter and blocks
 // waiting for incoming messages.
