@@ -1,7 +1,6 @@
 //
-// The application has three sub-commands: `conn` `pub` and `sub`.
+// The application has three sub-commands: `conn`and `sub`.
 // The `conn` sub-command connects to the server.
-// The `pub` sub-command publishes a given message to the server and then exits.
 // The `sub` sub-command subscribes to the given topic filter and blocks
 // waiting for incoming messages.
 //
@@ -9,17 +8,12 @@
 //
 // Connect to the specific server:
 // ```
-// $ ./quic_client conn 'mqtt-quic://127.0.0.1:14567'
+// $ ./sub conn 'mqtt-quic://127.0.0.1:14567'
 // ```
 //
-// Subscribe to `topic` and waiting for messages:
+// Subscribe to `topic` and waiting for messages and save the difference between the time of the message and the time of the subscription in Redis:
 // ```
-// $ ./quic_client sub 'mqtt-tcp://127.0.0.1:14567' topic
-// ```
-//
-// Publish 'hello' to `topic`:
-// ```
-// $ ./quic_client pub 'mqtt-tcp://127.0.0.1:14567' topic hello
+// $ ./sub sub "mqtt-quic://127.0.0.1:14567" 0 topic
 // ```
 //
 
