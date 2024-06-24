@@ -83,21 +83,6 @@ mqtt_msg_compose(int type, int qos, char *topic, char *payload)
 		nng_mqtt_msg_set_connect_proto_version(msg, 4);
 		nng_mqtt_msg_set_connect_keep_alive(msg, 30);
 		nng_mqtt_msg_set_connect_clean_session(msg, true);
-	} else if (type == SUB) {
-		nng_mqtt_msg_set_packet_type(msg, NNG_MQTT_SUBSCRIBE);
-
-		nng_mqtt_topic_qos subscriptions[] = {
-			{
-				.qos   = qos,
-				.topic = {
-					.buf    = (uint8_t *) topic,
-					.length = strlen(topic)
-				}
-			},
-		};
-		int count = sizeof(subscriptions) / sizeof(nng_mqtt_topic_qos);
-
-		nng_mqtt_msg_set_subscribe_topics(msg, subscriptions, count);
 	} else if (type == PUB) {
 		nng_mqtt_msg_set_packet_type(msg, NNG_MQTT_PUBLISH);
 
