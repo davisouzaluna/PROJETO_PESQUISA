@@ -84,7 +84,7 @@ void store_in_redis(const char *value, const char *redis_key) {
         redisFree(context);
         return;
     }
-    printf("Valor salvo com sucesso no Redis: %s\n", value);
+    printf("Valor salvo com sucesso no Redis: %s ,na chave: %s\n", value, redis_key );
     freeReplyObject(reply);
 
     // Encerrar a conexão com o servidor Redis
@@ -250,7 +250,20 @@ msg_recv_cb(void *rmsg, void * arg)
 	
 }
 
-
+void subscription(nng_socket *sock, const char *topic, int qos) {
+    nng_msg *msg = mqtt_msg_compose(SUB, qos, (char *)topic);
+    if (msg == NULL) {
+        printf("Failed to compose subscribe message.\n");
+        return;
+    }
+    int rv = nng_sendmsg(*sock, msg, NNG_FLAG_ALLOC);
+    if (rv != 0) {
+        printf("Failed to send subscribe message: %d\n", rv);
+		nng_msleep(1000);//esperar umm segundo para tentar novamente
+    } else {
+        //printf("Successfully subscribed to topic: %s\n", topic);
+    }
+}
 
 
 int
@@ -297,9 +310,10 @@ client(int type, const char *url, const char *qos, const char *topic, const char
 	case CONN:
 		break;
 	case SUB:
+
         g_redis_key= redis_key; //aqui eu defino o valor da variavel global para que o callback possa acessar
-		msg = mqtt_msg_compose(SUB, q, (char *)topic);
-		nng_sendmsg(*g_sock, msg, NNG_FLAG_ALLOC);
+		subscription(&sock, topic, q);
+		
 
 		break;
 
@@ -308,9 +322,14 @@ client(int type, const char *url, const char *qos, const char *topic, const char
 		printf("Unknown command.\n");
 	}
 
-	for (;;)
-		nng_msleep(100); //inserindo um tempo de 100ms para o subscriber para fazer com que a função ocorra de forma correta
+	for (;;){
+		//nng_msleep(1000); //inserindo um tempo de 100ms para o subscriber para fazer com que a função ocorra de forma correta
 
+		if (type == SUB) {
+			subscription(&sock, topic, q);//chamada para o subscriber
+		}
+	}
+	nng_msleep(1000);
 	nng_close(sock);
 	fprintf(stderr, "Done.\n");
 

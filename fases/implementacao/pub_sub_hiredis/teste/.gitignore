@@ -1,0 +1,5 @@
+#Ignorar a pasta do NanoSDK pois ela é muito pesada
+NanoSDK/ 
+
+#ignorar a pasta do hiredis
+hiredis/
