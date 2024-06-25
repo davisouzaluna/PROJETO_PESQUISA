@@ -3,3 +3,5 @@ NanoSDK/
 
 #ignorar a pasta do hiredis
 hiredis/
+
+**/build/
