@@ -2,6 +2,7 @@
     "files.associations": {
         "mqtt_client.h": "c",
         "string.h": "c",
-        "signal.h": "c"
+        "signal.h": "c",
+        "tls.h": "c"
     }
 }

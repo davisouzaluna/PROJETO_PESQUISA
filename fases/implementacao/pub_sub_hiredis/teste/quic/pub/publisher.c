@@ -155,6 +155,14 @@ client(int type, const char *url, const char *qos, const char *topic, const char
 	}
 	
 	*/
+	qpub = atoi(numero_pub);
+
+	if(qpub<=0){
+		printf("Número de publicações inválido.\n");
+		printf("Número de publicações deve ser maior que 0.\n");
+		return 0;
+	
+	}
 
 	if ((rv = nng_mqtt_quic_client_open_conf(&sock, url, &config_user)) != 0) {
 		printf("error in quic client open.\n");
@@ -181,7 +189,9 @@ client(int type, const char *url, const char *qos, const char *topic, const char
 
 	if (numero_pub){
 
-		qpub = atoi(numero_pub);
+		
+
+		
 		for(i=0;i<qpub;i++){
 		/*
 		If data is NULL, the payload is the time in ns.
@@ -201,7 +211,7 @@ client(int type, const char *url, const char *qos, const char *topic, const char
 			msg = mqtt_msg_compose(PUB, q, (char *)topic, tempo_atual_varchar);
 			printf("Tempo atual em varchar: %s\n", tempo_atual_varchar);
 			nng_sendmsg(*g_sock, msg, NNG_FLAG_ALLOC);
-            nng_msleep(10); //tempo de 10 ms entre os pacotes
+            nng_msleep(10); // pode ajustar o tempo 
 				
 		//msg = mqtt_msg_compose(PUB, q, (char *)topic, (char *)data);
 		//nng_sendmsg(*g_sock, msg, NNG_FLAG_ALLOC);
@@ -220,9 +230,9 @@ client(int type, const char *url, const char *qos, const char *topic, const char
 	sqlite_config(&sock, MQTT_PROTOCOL_VERSION_v311);
 #endif
 
-        	
-	nng_msleep(0);
-	nng_close(sock);
+     printf("terminou o envio\n");   	
+	//nng_msleep(0);
+	nng_close(sock);//aqui demora um pouco pois ele está desalocando os recursos
 	fprintf(stderr, "Done.\n");
 
 	return (0);

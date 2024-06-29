@@ -42,6 +42,10 @@
 
 static nng_socket * g_sock;
 const char * g_redis_key; //chave padrao para salvar no redis
+const char * g_topic; //topico padrao para se inscrever
+const char * g_qos;
+int g_count = 0; //contador para saber se é uma possível reconexão(quando o callback de conectado for chamado novamente ele incrementa o valor em 1 e entra dentro de u if que se subscreve novamente no tópico)	
+const char * g_type;
 
 conf_quic config_user = {
 	.tls = {
@@ -204,6 +208,14 @@ static int
 connect_cb(void *rmsg, void * arg)
 {
 	printf("[Connected][%s]...\n", (char *)arg);
+
+	//Se o contador for 1 e o type for um subscriber
+	if((g_count >= 1) && (g_type == SUB)){
+
+		subscription(g_sock, g_topic, g_qos);
+	}
+	g_count ++;
+	
 	return 0;
 }
 
@@ -212,12 +224,23 @@ disconnect_cb(void *rmsg, void * arg)
 {
 	printf("[Disconnected][%s]...\n", (char *)arg);
 	return 0;
+	printf("tentando reconexao...\n");
+
+	// Reenviar a mensagem de conexão
+	nng_msg *msg = mqtt_msg_compose(CONN, 0, NULL);
+    nng_sendmsg(*g_sock, msg, NNG_FLAG_ALLOC);
+
+    // Reinscrever-se no tópico
+    //subscription(g_sock, g_topic, g_qos);
+
+    return 0;
 }
 
 static int
 msg_send_cb(void *rmsg, void * arg)
 {
 	printf("[Msg Sent][%s]...\n", (char *)arg);
+	
 	return 0;
 }
 
@@ -252,6 +275,9 @@ msg_recv_cb(void *rmsg, void * arg)
 
 void subscription(nng_socket *sock, const char *topic, int qos) {
     nng_msg *msg = mqtt_msg_compose(SUB, qos, (char *)topic);
+	printf("sususususususususussu\n");
+
+	printf("verificando se nao tem callback\n");
     if (msg == NULL) {
         printf("Failed to compose subscribe message.\n");
         return;
@@ -263,7 +289,9 @@ void subscription(nng_socket *sock, const char *topic, int qos) {
     } else {
         //printf("Successfully subscribed to topic: %s\n", topic);
     }
+	return rv,msg;
 }
+
 
 
 int
@@ -273,6 +301,10 @@ client(int type, const char *url, const char *qos, const char *topic, const char
 	int         rv, sz, q;
 	nng_msg *   msg;
 	const char *arg = "CLIENT FOR QUIC";
+	g_topic = topic;
+	g_qos  =qos;
+	g_type = type;
+
 
 	/*
 	// Open a quic socket without configuration
@@ -294,9 +326,7 @@ client(int type, const char *url, const char *qos, const char *topic, const char
 	}
 	g_sock = &sock;
 
-	// MQTT Connect...
-	msg = mqtt_msg_compose(CONN, 0, NULL);
-	nng_sendmsg(sock, msg, NNG_FLAG_ALLOC);
+
 
 	if (qos) {
 		q = atoi(qos);
@@ -308,14 +338,54 @@ client(int type, const char *url, const char *qos, const char *topic, const char
 
 	switch (type) {
 	case CONN:
+				// MQTT Connect...
+		msg = mqtt_msg_compose(CONN, 0, NULL);
+	nng_sendmsg(sock, msg, NNG_FLAG_ALLOC);
 		break;
 	case SUB:
-
+			
         g_redis_key= redis_key; //aqui eu defino o valor da variavel global para que o callback possa acessar
+		msg = mqtt_msg_compose(CONN, 0, NULL);
+		nng_sendmsg(sock, msg, NNG_FLAG_ALLOC);
 		subscription(&sock, topic, q);
+		printf("subscrito em : %s\n", topic);
+		
+			for(;;){
+				if(disconnect_cb == 0){
+					msg = mqtt_msg_compose(CONN, 0, NULL);
+					nng_sendmsg(sock, msg, NNG_FLAG_ALLOC);
+					subscription(&sock, topic, q);
+					//printf("subscrito em : %s\n", topic);
+					printf("desconectado");
+					
+				}
+				if(msg_recv_cb == 1 && connect_cb == 0){
+					nng_msleep(1000);	
+					printf("nao recebeu nada\n");
+					if(msg==NULL){
+						subscription(&sock, topic, q);
+					}
+					
+				}
+				if(connect_cb ==0){
+					printf("conectado");
+					if(msg_recv_cb !=0){
+						nng_msleep(1000);
+						subscription(&sock, topic, q);
+					}
+					//subscription(&sock, topic, q);
+					printf("testeeeeee\n");
+					printf("subscrito em : %s\n", topic);
+				}
+				
+				printf("fora dos if's\n");
+				nng_msleep(1000);
+			}
 		
 
+		
 		break;
+		
 
     
 	default:
@@ -323,11 +393,14 @@ client(int type, const char *url, const char *qos, const char *topic, const char
 	}
 
 	for (;;){
-		//nng_msleep(1000); //inserindo um tempo de 100ms para o subscriber para fazer com que a função ocorra de forma correta
 
-		if (type == SUB) {
-			subscription(&sock, topic, q);//chamada para o subscriber
-		}
+		//caso queira testar a reconexão do subscriber(envio da mensagem subscriber ao broker) é só descomentar abaixo
+
+		/*nng_msleep(1000); //inserindo um tempo de 100ms para o subscriber para fazer com que a função ocorra de forma correta
+
+		//if (type == SUB) {
+			//subscription(&sock, topic, q);//chamada para o subscriber
+		}*/
 	}
 	nng_msleep(1000);
 	nng_close(sock);
