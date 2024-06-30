@@ -140,6 +140,14 @@ char *tempo_para_varchar() {
     // Retornando a string de tempo
     return tempo_varchar;
 }
+
+void publish(char *topic, int q){
+			char *tempo_atual_varchar = tempo_para_varchar();
+			nng_msg *msg = mqtt_msg_compose(PUB, q, (char *)topic, tempo_atual_varchar);
+			printf("Tempo atual em varchar: %s\n", tempo_atual_varchar);
+			nng_sendmsg(*g_sock, msg, NNG_FLAG_ALLOC);
+};
+
 int
 client(int type, const char *url, const char *qos, const char *topic, const char *numero_pub)
 {
@@ -189,7 +197,7 @@ client(int type, const char *url, const char *qos, const char *topic, const char
 
 	if (numero_pub){
 
-		
+	
 
 		
 		for(i=0;i<qpub;i++){
@@ -207,12 +215,9 @@ client(int type, const char *url, const char *qos, const char *topic, const char
 			
 		
 
-		char *tempo_atual_varchar = tempo_para_varchar();
-			msg = mqtt_msg_compose(PUB, q, (char *)topic, tempo_atual_varchar);
-			printf("Tempo atual em varchar: %s\n", tempo_atual_varchar);
-			nng_sendmsg(*g_sock, msg, NNG_FLAG_ALLOC);
-            nng_msleep(10); // pode ajustar o tempo 
-				
+			publish(topic,q);
+			nng_msleep(10);
+			//printf("Publicação %d\n", i+1);
 		//msg = mqtt_msg_compose(PUB, q, (char *)topic, (char *)data);
 		//nng_sendmsg(*g_sock, msg, NNG_FLAG_ALLOC);
 		

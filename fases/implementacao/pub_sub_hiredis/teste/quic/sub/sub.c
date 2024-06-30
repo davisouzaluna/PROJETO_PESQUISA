@@ -30,6 +30,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <pthread.h>
 
 #define MAX_STR_LEN 30
 #ifndef CLOCK_REALTIME
@@ -64,6 +65,39 @@ conf_quic config_user = {
 	.qdiscon_timeout = 30,
 	.qidle_timeout = 30,
 };
+
+typedef struct {
+    const char *value;
+    const char *redis_key;
+} RedisParams;
+
+void* store_in_redis_async(void *params) {
+    RedisParams *redis_params = (RedisParams *)params;
+    store_in_redis(redis_params->value, redis_params->redis_key);
+    free(params); // Libera a memória alocada para os parametros
+    return NULL;
+}
+
+void store_in_redis_async_call(const char *value, const char *redis_key) {
+    pthread_t thread;
+    RedisParams *params = malloc(sizeof(RedisParams));
+    if (params == NULL) {
+        perror("Erro ao alocar memória para os parâmetros da thread");
+        exit(EXIT_FAILURE);
+    }
+    params->value = value;
+    params->redis_key = redis_key;
+
+    if (pthread_create(&thread, NULL, store_in_redis_async, params) != 0) {
+        perror("Erro ao criar a thread");
+        free(params); // Libera a memória alocada em caso de falha na criação da thread
+        exit(EXIT_FAILURE);
+    }
+
+    // opcional: Se não precisar esperar a thread terminar, você pode desanexá-la, por enquanto preferi deixar a thread rodando
+    pthread_detach(thread);
+}
+
 
 void store_in_redis(const char *value, const char *redis_key) {
     // Conectar ao servidor Redis na porta 6379 (padrão)
@@ -268,16 +302,14 @@ msg_recv_cb(void *rmsg, void * arg)
    
 	printf("topic   => %.*s\n"
 	       "payload => %.*s\n",topicsz, topic, payloadsz, payload);
-	store_in_redis(valor_redis, g_redis_key);
+	//store_in_redis(valor_redis, g_redis_key);
+	store_in_redis_async_call(valor_redis, g_redis_key);
 	return 0;
 	
 }
 
 void subscription(nng_socket *sock, const char *topic, int qos) {
     nng_msg *msg = mqtt_msg_compose(SUB, qos, (char *)topic);
-	printf("sususususususususussu\n");
-
-	printf("verificando se nao tem callback\n");
     if (msg == NULL) {
         printf("Failed to compose subscribe message.\n");
         return;
@@ -350,38 +382,7 @@ client(int type, const char *url, const char *qos, const char *topic, const char
 		subscription(&sock, topic, q);
 		printf("subscrito em : %s\n", topic);
 		
-			for(;;){
-				if(disconnect_cb == 0){
-					msg = mqtt_msg_compose(CONN, 0, NULL);
-					nng_sendmsg(sock, msg, NNG_FLAG_ALLOC);
-					subscription(&sock, topic, q);
-					//printf("subscrito em : %s\n", topic);
-					printf("desconectado");
-					
-				}
-				if(msg_recv_cb == 1 && connect_cb == 0){
-					nng_msleep(1000);	
-					printf("nao recebeu nada\n");
-					if(msg==NULL){
-						subscription(&sock, topic, q);
-					}
-					
-				}
-				if(connect_cb ==0){
-					printf("conectado");
-					if(msg_recv_cb !=0){
-						nng_msleep(1000);
-						subscription(&sock, topic, q);
-					}
-					//subscription(&sock, topic, q);
-					printf("testeeeeee\n");
-					printf("subscrito em : %s\n", topic);
-				}
-				
-				printf("fora dos if's\n");
-				nng_msleep(1000);
-			}
-		
+			
 
 		
 		break;
