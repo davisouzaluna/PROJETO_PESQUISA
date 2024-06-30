@@ -256,14 +256,18 @@ connect_cb(void *rmsg, void * arg)
 static int
 disconnect_cb(void *rmsg, void * arg)
 {
+	static int retry_count = 0;
 	printf("[Disconnected][%s]...\n", (char *)arg);
 	return 0;
 	printf("tentando reconexao...\n");
 
+	int backoff_time = (1 << retry_count); //Algoritmo de exponencial backoff
 	// Reenviar a mensagem de conexão
 	nng_msg *msg = mqtt_msg_compose(CONN, 0, NULL);
     nng_sendmsg(*g_sock, msg, NNG_FLAG_ALLOC);
 
+	nng_msleep(backoff_time * 1000); //Esperar um tempo exponencialmente crescente	
+	retry_count++;
     // Reinscrever-se no tópico
     //subscription(g_sock, g_topic, g_qos);
 
