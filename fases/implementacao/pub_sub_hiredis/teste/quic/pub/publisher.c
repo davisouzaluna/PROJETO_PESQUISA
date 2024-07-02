@@ -141,7 +141,7 @@ char *tempo_para_varchar() {
     return tempo_varchar;
 }
 
-void publish(char *topic, int q){
+void publish(const char *topic, int q){
 			char *tempo_atual_varchar = tempo_para_varchar();
 			nng_msg *msg = mqtt_msg_compose(PUB, q, (char *)topic, tempo_atual_varchar);
 			printf("Tempo atual em varchar: %s\n", tempo_atual_varchar);
