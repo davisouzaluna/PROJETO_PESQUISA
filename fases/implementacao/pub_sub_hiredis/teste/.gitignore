@@ -4,4 +4,7 @@ NanoSDK/
 #ignorar a pasta do hiredis
 hiredis/
 
+#ignorar a pasta do mbedtls
+mbedtls/
+
 **/build/
