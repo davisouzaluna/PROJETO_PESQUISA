@@ -216,7 +216,7 @@ client(int type, const char *url, const char *qos, const char *topic, const char
 		
 
 			publish(topic,q);
-			nng_msleep(10);
+			nng_msleep(10);//necessário um atraso pro subscriber poder lidar com as mensagens
 			//printf("Publicação %d\n", i+1);
 		//msg = mqtt_msg_compose(PUB, q, (char *)topic, (char *)data);
 		//nng_sendmsg(*g_sock, msg, NNG_FLAG_ALLOC);

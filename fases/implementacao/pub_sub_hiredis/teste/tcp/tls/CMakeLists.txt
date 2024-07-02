@@ -7,7 +7,7 @@
 cmake_minimum_required(VERSION 3.13)
 
 project(mqtt_async)
-
+set(MBEDTLS_ROOT_DIR "../../mbedtls/cmake")
 if (BUILD_DEMO)
 else ()
 # Call this from your own project's makefile.
@@ -15,6 +15,10 @@ else ()
 endif (BUILD_DEMO)
 
 find_package(Threads)
+# Definir MBEDTLS_ROOT_DIR usando variável de ambiente
+
+
+
 
 if (DEBUG)
   SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g")
@@ -31,6 +35,8 @@ target_link_libraries(mqtt_async nng::nng)
 target_link_libraries(mqtt_async ${CMAKE_THREAD_LIBS_INIT})
 
 if(NNG_ENABLE_TLS)
+    find_package(MbedTLS)
+    target_link_libraries(mqtt_async mbedtls mbedx509 mbedcrypto)
     add_definitions(-DNNG_SUPP_TLS)
 endif()
 

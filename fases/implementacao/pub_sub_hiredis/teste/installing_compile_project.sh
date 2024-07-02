@@ -82,6 +82,34 @@ else
     fi
 fi
 
+#Instalando o mbedTLS
+if [ ! -d "./mbedtls" ]; then
+    echo "Clonando e instalando o mbedTLS..."
+    git clone https://github.com/Mbed-TLS/mbedtls.git
+    cd mbedtls
+    git submodule update --init
+    python3 -m pip install --user -r scripts/basic.requirements.txt
+    mkdir build
+    cd build
+    cmake -DUSE_SHARED_MBEDTLS_LIBRARY=On .. #para a instalação de bibliotecas compartilhadas
+    # Caso queira a instalação normal faça: cmake ..
+    make && sudo make install
+    cd ../..    
+else
+    if is_compiled "mbedtls" "/library/libmebdtls.so"; then
+        echo "mbedTLS já está compilado."
+    else
+        echo "Compilando o mbedTLS..."
+        cd mbedtls
+        mkdir -p build
+        cd build
+        cmake -DUSE_SHARED_MBEDTLS_LIBRARY=On ..
+        make && sudo make install
+        cd ../..
+    fi
+fi
+
+
 #Instalando o NanoSDK
 if [ ! -d "./NanoSDK" ]; then
     echo "Clonando e instalando o NanoSDK..."
