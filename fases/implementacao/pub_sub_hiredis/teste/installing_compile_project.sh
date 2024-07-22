@@ -25,6 +25,7 @@ dependencies=(
     ninja-build
     libc6-dev
     gcc-multilib
+    //pip-python3
 )
 
 # Verifica e instala cada dependência
