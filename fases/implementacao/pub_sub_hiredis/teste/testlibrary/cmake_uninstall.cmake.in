@@ -1,0 +1,14 @@
+# Lê o manifesto de instalação
+file(READ "${CMAKE_CURRENT_BINARY_DIR}/install_manifest.txt" INSTALL_MANIFEST_CONTENTS)
+
+# Converte o conteúdo em uma lista de arquivos
+string(REPLACE "\n" ";" INSTALL_MANIFEST "${INSTALL_MANIFEST_CONTENTS}")
+
+foreach (FILE IN LISTS INSTALL_MANIFEST)
+  if(EXISTS "${FILE}")
+    message(STATUS "Removing ${FILE}")
+    file(REMOVE ${FILE})
+  else()
+    message(WARNING "File ${FILE} does not exist, cannot remove")
+  endif()
+endforeach()

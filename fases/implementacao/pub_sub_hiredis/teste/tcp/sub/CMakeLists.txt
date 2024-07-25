@@ -28,6 +28,8 @@ add_executable(sub_tcp sub_tcp.c)
 target_link_libraries(sub_tcp nng::nng)
 target_link_libraries(sub_tcp ${CMAKE_THREAD_LIBS_INIT})
 
+
+
 if(NNG_ENABLE_TLS)
     find_package(MbedTLS)
     target_link_libraries(sub_tcp mbedtls mbedx509 mbedcrypto)

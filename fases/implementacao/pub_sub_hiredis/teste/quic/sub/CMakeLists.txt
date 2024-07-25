@@ -11,12 +11,16 @@ cmake_minimum_required(VERSION 3.13)
 
 project(sub)
 
+set(CMAKE_PREFIX_PATH "/lib/cmake/TestLibrary" ${CMAKE_PREFIX_PATH})
+
+
 # Call this from your own project's makefile.
 find_package(nng CONFIG REQUIRED)
 
 find_package(Threads)
 find_package(msquic)
 find_package(OpenSSL)
+#find_library(TestLibrary REQUIRED)
 
 
 
@@ -39,7 +43,7 @@ if(OPENSSL_FOUND)
 endif()
 
 
-target_link_libraries(sub nng::nng msquic pthread hiredis)
+target_link_libraries(sub nng::nng msquic pthread hiredis testlibrary)
 target_compile_definitions(sub PRIVATE NNG_ELIDE_DEPRECATED)
 
 if (NNG_ENABLE_SQLITE)

@@ -6,27 +6,6 @@
 // found online at https://opensource.org/licenses/MIT.
 //
 
-//
-// This is just a simple MQTT client demonstration application.
-//
-// The application has two sub-commands: `pub` and `sub`. The `pub`
-// sub-command publishes a given message to the server and then exits.
-// The `sub` sub-command subscribes to the given topic filter and blocks
-// waiting for incoming messages.
-//
-// # Example:
-//
-// Publish 'hello' to `topic` with QoS `0`:
-// ```
-// $ ./mqtt_client pub mqtt-tcp://127.0.0.1:1883 0 topic hello
-// ```
-//
-// Subscribe to `topic` with QoS `0` and waiting for messages:
-// ```
-// $ ./mqtt_client sub mqtt-tcp://127.0.0.1:1883 0 topic
-// ```
-//
-
 #include <assert.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -34,250 +13,255 @@
 #include <string.h>
 #include <signal.h>
 #include <time.h>
+#include <hiredis/hiredis.h>
 
 #include "nng/mqtt/mqtt_client.h"
 #include "nng/nng.h"
 #include "nng/supplemental/util/platform.h"
+#include <pthread.h>
 
-// Subcommands
+#define MAX_STR_LEN 30
+#ifndef CLOCK_REALTIME
+#define CLOCK_REALTIME 0
+#endif
+
+#define BILLION 1000000000
+
+// Subcommand
 #define PUBLISH "pub"
-#define SUBSCRIBE "sub"
 
-void
-fatal(const char *msg, int rv)
-{
-	fprintf(stderr, "%s: %s\n", msg, nng_strerror(rv));
+void fatal(const char *msg, int rv) {
+    fprintf(stderr, "%s: %s\n", msg, nng_strerror(rv));
+}
+
+typedef struct {
+    const char *value;
+    const char *redis_key;
+} RedisParams;
+
+void store_in_redis(const char *value, const char *redis_key) {
+    // Conectar ao servidor Redis na porta 6379 (padrão)
+    redisContext *context = redisConnect("127.0.0.1", 6379);
+    if (context == NULL || context->err) {
+        if (context) {
+            printf("Erro na conexão com o Redis: %s\n", context->errstr);
+            redisFree(context);
+        } else {
+            printf("Erro na alocação do contexto do Redis\n");
+        }
+        return;
+    }
+
+    printf("Conectado ao servidor Redis\n");
+
+    // Salvar o valor no Redis com a chave fornecida ou "valores" como padrão
+    const char *key = redis_key && *redis_key ? redis_key : "valores";
+    redisReply *reply = redisCommand(context, "RPUSH %s \"%s\"", key, value);
+    if (reply == NULL) {
+        printf("Erro ao salvar os dados no Redis\n");
+        redisFree(context);
+        return;
+    }
+    printf("Valor salvo com sucesso no Redis: %s ,na chave: %s\n", value, redis_key);
+    freeReplyObject(reply);
+
+    // Encerrar a conexão com o servidor Redis
+    redisFree(context);
+}
+
+void *store_in_redis_async(void *params) {
+    RedisParams *redis_params = (RedisParams *)params;
+    store_in_redis(redis_params->value, redis_params->redis_key);
+    free(params); // Libera a memória alocada para os parametros
+    return NULL;
+}
+
+void store_in_redis_async_call(const char *value, const char *redis_key) {
+    pthread_t thread;
+    RedisParams *params = malloc(sizeof(RedisParams));
+    if (params == NULL) {
+        perror("Erro ao alocar memória para os parâmetros da thread");
+        exit(EXIT_FAILURE);
+    }
+    params->value = value;
+    params->redis_key = redis_key;
+
+    if (pthread_create(&thread, NULL, store_in_redis_async, params) != 0) {
+        perror("Erro ao criar a thread");
+        free(params); // Libera a memória alocada em caso de falha na criação da thread
+        exit(EXIT_FAILURE);
+    }
+
+    // opcional: Se não precisar esperar a thread terminar, você pode desanexá-la, por enquanto preferi deixar a thread rodando
+    pthread_detach(thread);
+}
+
+long long tempo_atual_nanossegundos() {
+    struct timespec tempo_atual;
+    clock_gettime(CLOCK_REALTIME, &tempo_atual);
+
+    // Converter segundos para nanossegundos e adicionar nanossegundos
+    return tempo_atual.tv_sec * BILLION + tempo_atual.tv_nsec;
+}
+
+char *tempo_para_varchar() {
+    struct timespec tempo_atual;
+    clock_gettime(CLOCK_REALTIME, &tempo_atual);
+
+    // Convertendo o tempo para uma string legível
+    char *tempo_varchar = (char *)malloc(MAX_STR_LEN * sizeof(char));
+    if (tempo_varchar == NULL) {
+        perror("Erro ao alocar memória");
+        exit(EXIT_FAILURE);
+    }
+
+    snprintf(tempo_varchar, MAX_STR_LEN, "%ld.%09ld", tempo_atual.tv_sec, tempo_atual.tv_nsec);
+
+    // Retornando a string de tempo
+    return tempo_varchar;
 }
 
 int keepRunning = 1;
-void
-intHandler(int dummy)
-{
-	keepRunning = 0;
-	fprintf(stderr, "\nclient exit(0).\n");
-	// nng_closeall();
-	exit(0);
-}
-
-// Print the given string limited to 80 columns.
-//
-// The `prefix` should be a null terminated string much smaller than 80,
-// `str` and `len` designates the string to be printed, `quote` specifies
-// whether to print in single quotes.
-void
-print80(const char *prefix, const char *str, size_t len, bool quote)
-{
-	size_t max_len = 80 - strlen(prefix) - (quote ? 2 : 0);
-	char * q       = quote ? "'" : "";
-	if (len <= max_len) {
-		// case the output fit in a line
-		printf("%s%s%.*s%s\n", prefix, q, (int) len, str, q);
-	} else {
-		// case we truncate the payload with ellipses
-		printf(
-		    "%s%s%.*s%s...\n", prefix, q, (int) (max_len - 3), str, q);
-	}
-}
-
-static void
-disconnect_cb(nng_pipe p, nng_pipe_ev ev, void *arg)
-{
-	int reason = 0;
-	// get connect reason
-	nng_pipe_get_int(p, NNG_OPT_MQTT_DISCONNECT_REASON, &reason);
-	// property *prop;
-	// nng_pipe_get_ptr(p, NNG_OPT_MQTT_DISCONNECT_PROPERTY, &prop);
-	// nng_socket_get?
-	printf("%s: disconnected!\n", __FUNCTION__);
-}
-
-static void
-connect_cb(nng_pipe p, nng_pipe_ev ev, void *arg)
-{
-	int reason;
-	// get connect reason
-	nng_pipe_get_int(p, NNG_OPT_MQTT_CONNECT_REASON, &reason);
-	// get property for MQTT V5
-	// property *prop;
-	// nng_pipe_get_ptr(p, NNG_OPT_MQTT_CONNECT_PROPERTY, &prop);
-	printf("%s: connected!\n", __FUNCTION__);
+void intHandler(int dummy) {
+    keepRunning = 0;
+    fprintf(stderr, "\nclient exit(0).\n");
+    exit(0);
 }
 
 // Connect to the given address.
-int
-client_connect(
-    nng_socket *sock, nng_dialer *dialer, const char *url, bool verbose)
-{
-	int        rv;
+int client_connect(nng_socket *sock, nng_dialer *dialer, const char *url, bool verbose) {
+    int rv;
 
-	if ((rv = nng_mqtt_client_open(sock)) != 0) {
-		fatal("nng_socket", rv);
-	}
+    if ((rv = nng_mqtt_client_open(sock)) != 0) {
+        fatal("nng_socket", rv);
+    }
 
-	if ((rv = nng_dialer_create(dialer, *sock, url)) != 0) {
-		fatal("nng_dialer_create", rv);
-	}
+    if ((rv = nng_dialer_create(dialer, *sock, url)) != 0) {
+        fatal("nng_dialer_create", rv);
+    }
 
-	// create a CONNECT message
-	/* CONNECT */
-	nng_msg *connmsg;
-	nng_mqtt_msg_alloc(&connmsg, 0);
-	nng_mqtt_msg_set_packet_type(connmsg, NNG_MQTT_CONNECT);
-	nng_mqtt_msg_set_connect_proto_version(connmsg, 4);
-	nng_mqtt_msg_set_connect_keep_alive(connmsg, 60);
-	nng_mqtt_msg_set_connect_user_name(connmsg, "nng_mqtt_client");
-	nng_mqtt_msg_set_connect_password(connmsg, "secrets");
-	nng_mqtt_msg_set_connect_will_msg(
-	    connmsg, (uint8_t *) "bye-bye", strlen("bye-bye"));
-	nng_mqtt_msg_set_connect_will_topic(connmsg, "will_topic");
-	nng_mqtt_msg_set_connect_clean_session(connmsg, true);
+    // create a CONNECT message
+    /* CONNECT */
+    nng_msg *connmsg;
+    nng_mqtt_msg_alloc(&connmsg, 0);
+    nng_mqtt_msg_set_packet_type(connmsg, NNG_MQTT_CONNECT);
+    nng_mqtt_msg_set_connect_proto_version(connmsg, 4);
+    nng_mqtt_msg_set_connect_keep_alive(connmsg, 60);
+    nng_mqtt_msg_set_connect_user_name(connmsg, "nng_mqtt_client");
+    nng_mqtt_msg_set_connect_password(connmsg, "secrets");
+    nng_mqtt_msg_set_connect_will_msg(connmsg, (uint8_t *)"bye-bye", strlen("bye-bye"));
+    nng_mqtt_msg_set_connect_will_topic(connmsg, "will_topic");
+    nng_mqtt_msg_set_connect_clean_session(connmsg, true);
 
-	nng_mqtt_set_connect_cb(*sock, connect_cb, sock);
-	nng_mqtt_set_disconnect_cb(*sock, disconnect_cb, connmsg);
+    printf("Connecting to server ...\n");
+    nng_dialer_set_ptr(*dialer, NNG_OPT_MQTT_CONNMSG, connmsg);
+    nng_dialer_start(*dialer, NNG_FLAG_NONBLOCK);
 
-	uint8_t buff[1024] = { 0 };
-
-	if (verbose) {
-		nng_mqtt_msg_dump(connmsg, buff, sizeof(buff), true);
-		printf("%s\n", buff);
-	}
-
-	printf("Connecting to server ...\n");
-	nng_dialer_set_ptr(*dialer, NNG_OPT_MQTT_CONNMSG, connmsg);
-	nng_dialer_start(*dialer, NNG_FLAG_NONBLOCK);
-
-	return (0);
+    return (0);
 }
 
 // Publish a message to the given topic and with the given QoS.
-int
-client_publish(nng_socket sock, const char *topic, uint8_t *payload,
-    uint32_t payload_len, uint8_t qos, bool verbose)
-{
-	int rv;
+int client_publish(nng_socket sock, const char *topic, uint8_t qos, bool verbose) {
+    int rv;
 
-	// create a PUBLISH message
-	nng_msg *pubmsg;
-	nng_mqtt_msg_alloc(&pubmsg, 0);
-	nng_mqtt_msg_set_packet_type(pubmsg, NNG_MQTT_PUBLISH);
-	nng_mqtt_msg_set_publish_dup(pubmsg, 0);
-	nng_mqtt_msg_set_publish_qos(pubmsg, qos);
-	nng_mqtt_msg_set_publish_retain(pubmsg, 0);
-	nng_mqtt_msg_set_publish_payload(
-	    pubmsg, (uint8_t *) payload, payload_len);
-	nng_mqtt_msg_set_publish_topic(pubmsg, topic);
+    // Criar uma mensagem PUBLISH
+    nng_msg *pubmsg;
+    nng_mqtt_msg_alloc(&pubmsg, 0);
+    nng_mqtt_msg_set_packet_type(pubmsg, NNG_MQTT_PUBLISH);
+    nng_mqtt_msg_set_publish_dup(pubmsg, 0);
+    nng_mqtt_msg_set_publish_qos(pubmsg, qos);
+    nng_mqtt_msg_set_publish_retain(pubmsg, 0);
 
-	if (verbose) {
-		uint8_t print[1024] = { 0 };
-		nng_mqtt_msg_dump(pubmsg, print, 1024, true);
-		printf("%s\n", print);
-	}
+    // Gerar o timestamp atual e usá-lo como payload
+    char *tempo_atual_varchar = tempo_para_varchar();
+    nng_mqtt_msg_set_publish_payload(pubmsg, (uint8_t *)tempo_atual_varchar, strlen(tempo_atual_varchar));
 
-	printf("Publishing to '%s' ...\n", topic);
-	if ((rv = nng_sendmsg(sock, pubmsg, NNG_FLAG_NONBLOCK)) != 0) {
-		fatal("nng_sendmsg", rv);
-	}
+    // Definir o tópico da mensagem
+    nng_mqtt_msg_set_publish_topic(pubmsg, topic);
 
-	return rv;
+    if (verbose) {
+        uint8_t print[1024] = {0};
+        nng_mqtt_msg_dump(pubmsg, print, 1024, true);
+        printf("%s\n", print);
+    }
+
+    printf("Publishing to '%s' with timestamp '%s'...\n", topic, tempo_atual_varchar);
+
+    // Enviar a mensagem
+    if ((rv = nng_sendmsg(sock, pubmsg, NNG_FLAG_NONBLOCK)) != 0) {
+        fatal("nng_sendmsg", rv);
+    }
+
+    // Liberar a memória alocada para o timestamp
+    free(tempo_atual_varchar);
+
+    return rv;
 }
+
 
 struct pub_params {
-	nng_socket *sock;
-	const char *topic;
-	uint8_t *   data;
-	uint32_t    data_len;
-	uint8_t     qos;
-	bool        verbose;
-	uint32_t    interval;
+    nng_socket *sock;
+    const char *topic;
+    uint8_t qos;
+    bool verbose;
+    uint32_t interval;
 };
 
-void
-publish_cb(void *args)
-{
-	int                rv;
-	struct pub_params *params = args;
-	do {
-		client_publish(*params->sock, params->topic, params->data,
-		    params->data_len, params->qos, params->verbose);
-		nng_msleep(params->interval);
-	} while (params->interval > 0);
-	printf("thread_exit\n");
+void publish_cb(void *args) {
+    struct pub_params *params = args;
+
+    do {
+        // Chama client_publish que agora gera o payload com o timestamp
+        client_publish(*params->sock, params->topic, params->qos, params->verbose);
+
+        // Espera o intervalo especificado antes de publicar novamente, se interval > 0
+        if (params->interval > 0) {
+            nng_msleep(params->interval); // Usa a função de sono da NNG para esperar
+        }
+    } while (params->interval > 0 && keepRunning); // Continua enquanto interval for positivo
+
+    printf("thread_exit\n");
 }
 
-struct pub_params params;
 
+int main(const int argc, const char **argv) {
+    nng_socket sock;
+    nng_dialer dialer;
 
+    if (argc < 6 || 0 != strcmp(argv[1], PUBLISH)) {
+        goto error;
+    }
 
+    const char *url = argv[2];
+    uint8_t qos = atoi(argv[3]);
+    const char *topic = argv[4];
+    uint32_t interval_ms = atoi(argv[5]);
 
-int
-main(const int argc, const char **argv)
-{
-	nng_socket sock;
-	nng_dialer dailer;
+    int rv = 0;
+    char *verbose_env = getenv("VERBOSE");
+    bool verbose = (verbose_env != NULL && strcmp(verbose_env, "1") == 0);
 
-	const char *exe = argv[0];
+    printf("verbose is %d\n", verbose);
+    client_connect(&sock, &dialer, url, verbose);
 
-	const char *cmd;
+    // Setar a flag para tratamento de interrupção de saída com Ctrl+C
+    signal(SIGINT, intHandler);
 
-	if (5 == argc && 0 == strcmp(argv[1], SUBSCRIBE)) {
-		cmd = SUBSCRIBE;
-	} else if (6 <= argc && 0 == strcmp(argv[1], PUBLISH)) {
-		cmd = PUBLISH;
-	} else {
-		goto error;
-	}
+    while (keepRunning) {
+        client_publish(sock, topic, qos, verbose);
 
-	const char *url         = argv[2];
-	uint8_t     qos         = atoi(argv[3]);
-	const char *topic       = argv[4];
-	int         rv          = 0;
-	char *      verbose_env = getenv("VERBOSE");
-	bool        verbose     = verbose_env && strlen(verbose_env) > 0;
+        if (interval_ms > 0) {
+            nng_msleep(interval_ms); // Espera o intervalo especificado antes de publicar novamente
+        }
+    }
 
-	client_connect(&sock, &dailer, url, verbose);
+    if ((rv = nng_close(sock)) != 0) {
+        fatal("nng_close", rv);
+    }
 
-	signal(SIGINT, intHandler);
-
-	if (strcmp(PUBLISH, cmd) == 0) {
-		const char *data     = argv[5];
-		uint32_t    interval = 0;
-		uint32_t    nthread  = 1;
-
-		if (argc >= 7) {
-			interval = atoi(argv[6]);
-		}
-		if (argc >= 8) {
-			nthread = atoi(argv[7]);
-		}
-		nng_thread *threads[nthread];
-
-		params.sock = &sock, params.topic = topic;
-		params.data     = (uint8_t *) data;
-		params.data_len = strlen(data);
-		params.qos      = qos;
-		params.interval = interval;
-		params.verbose  = verbose;
-
-		char thread_name[20];
-
-		size_t i = 0;
-		for (i = 0; i < nthread; i++) {
-			nng_thread_create(&threads[i], publish_cb, &params);
-		}
-
-		for (i = 0; i < nthread; i++) {
-			nng_thread_destroy(threads[i]);
-		}
-	} 
-
-	nng_msleep(1000);
-	// nng_mqtt_disconnect(&sock, 5, NULL);
-
-	return 0;
+    return 0;
 
 error:
-	fprintf(stderr,
-	    "Usage: %s %s <URL> <QOS> <TOPIC> <data> <interval> <parallel>\n",
-	    exe, PUBLISH);
-	return 1;
+    fprintf(stderr, "Usage: %s %s url qos topic interval_ms\n", argv[0], PUBLISH);
+    return 1;
 }

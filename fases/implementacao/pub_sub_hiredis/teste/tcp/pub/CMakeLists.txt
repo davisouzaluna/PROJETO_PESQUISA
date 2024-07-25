@@ -27,7 +27,7 @@ if (DEBUG)
 endif (DEBUG)
 
 add_executable(mqtt_client mqtt_client.c)
-target_link_libraries(mqtt_client nng::nng)
+target_link_libraries(mqtt_client nng::nng hiredis)
 target_link_libraries(mqtt_client ${CMAKE_THREAD_LIBS_INIT})
 
 if(NNG_ENABLE_TLS)

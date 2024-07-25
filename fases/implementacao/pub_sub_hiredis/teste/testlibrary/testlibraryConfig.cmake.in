@@ -1,0 +1,24 @@
+# Define the target and import it
+include(CMakeFindDependencyMacro)
+find_dependency(hiredis REQUIRED)
+
+include(CMakePackageConfigHelpers)
+
+# Configure the config file
+configure_package_config_file(
+  "${CMAKE_CURRENT_SOURCE_DIR}/testlibraryConfig.cmake.in"
+  "${CMAKE_CURRENT_BINARY_DIR}/testlibraryConfig.cmake"
+  INSTALL_DESTINATION lib/cmake/testlibrary
+)
+
+# Install the config file
+install(FILES
+  "${CMAKE_CURRENT_BINARY_DIR}/testlibraryConfig.cmake"
+  DESTINATION lib/cmake/testlibrary
+)
+
+# Install the version file
+install(FILES
+  "${CMAKE_CURRENT_BINARY_DIR}/testlibraryConfigVersion.cmake"
+  DESTINATION lib/cmake/testlibrary
+)
