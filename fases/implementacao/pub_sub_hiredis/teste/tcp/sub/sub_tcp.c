@@ -7,23 +7,16 @@
 //
 
 //
-// This is just a simple MQTT client demonstration application.
+// This is a simple MQTT subscriber demonstration application.
 //
-// The application has two sub-commands: `pub` and `sub`. The `pub`
-// sub-command publishes a given message to the server and then exits.
-// The `sub` sub-command subscribes to the given topic filter and blocks
+// The application subscribes to the given topic filter and blocks
 // waiting for incoming messages.
 //
 // # Example:
 //
-// Publish 'hello' to `topic` with QoS `0`:
+// Subscribe to `topic` with QoS `0` and wait for messages:
 // ```
-// $ ./mqtt_client pub mqtt-tcp://127.0.0.1:1883 0 topic hello
-// ```
-//
-// Subscribe to `topic` with QoS `0` and waiting for messages:
-// ```
-// $ ./mqtt_client sub mqtt-tcp://127.0.0.1:1883 0 topic
+// $ ./mqtt_client_sub mqtt-tcp://127.0.0.1:1883 0 topic
 // ```
 //
 
@@ -33,370 +26,322 @@
 #include <stdlib.h>
 #include <string.h>
 #include <signal.h>
+#include <pthread.h>
+#include <hiredis/hiredis.h>
 #include <time.h>
 
 #include "nng/mqtt/mqtt_client.h"
 #include "nng/nng.h"
 #include "nng/supplemental/util/platform.h"
 
-// Subcommands
-#define PUBLISH "pub"
 #define SUBSCRIBE "sub"
 
-void
-fatal(const char *msg, int rv)
+#define MAX_STR_LEN 30
+#ifndef CLOCK_REALTIME
+#define CLOCK_REALTIME 0
+#endif
+
+#define BILLION 1000000000
+
+
+void fatal(const char *msg, int rv)
 {
-	fprintf(stderr, "%s: %s\n", msg, nng_strerror(rv));
+    fprintf(stderr, "%s: %s\n", msg, nng_strerror(rv));
+}
+
+typedef struct {
+    const char *value;
+    const char *redis_key;
+} RedisParams;
+
+void store_in_redis(const char *value, const char *redis_key) {
+    // Conectar ao servidor Redis na porta 6379 (padrão)
+    redisContext *context = redisConnect("127.0.0.1", 6379);
+    if (context == NULL || context->err) {
+        if (context) {
+            printf("Erro na conexão com o Redis: %s\n", context->errstr);
+            redisFree(context);
+        } else {
+            printf("Erro na alocação do contexto do Redis\n");
+        }
+        return;
+    }
+
+    printf("Conectado ao servidor Redis\n");
+
+    // Salvar o valor no Redis com a chave fornecida ou "valores" como padrão
+    const char *key = redis_key && *redis_key ? redis_key : "valores";
+    redisReply *reply = redisCommand(context, "RPUSH %s \"%s\"", key, value);
+    if (reply == NULL) {
+        printf("Erro ao salvar os dados no Redis\n");
+        redisFree(context);
+        return;
+    }
+    printf("Valor salvo com sucesso no Redis: %s ,na chave: %s\n", value, redis_key);
+    freeReplyObject(reply);
+
+    // Encerrar a conexão com o servidor Redis
+    redisFree(context);
+}
+
+void *store_in_redis_async(void *params) {
+    RedisParams *redis_params = (RedisParams *)params;
+    store_in_redis(redis_params->value, redis_params->redis_key);
+    free(params); // Libera a memória alocada para os parametros
+    return NULL;
+}
+
+void store_in_redis_async_call(const char *value, const char *redis_key) {
+    pthread_t thread;
+    RedisParams *params = malloc(sizeof(RedisParams));
+    if (params == NULL) {
+        perror("Erro ao alocar memória para os parâmetros da thread");
+        exit(EXIT_FAILURE);
+    }
+    params->value = value;
+    params->redis_key = redis_key;
+
+    if (pthread_create(&thread, NULL, store_in_redis_async, params) != 0) {
+        perror("Erro ao criar a thread");
+        free(params); // Libera a memória alocada em caso de falha na criação da thread
+        exit(EXIT_FAILURE);
+    }
+
+    // opcional: Se não precisar esperar a thread terminar, você pode desanexá-la, por enquanto preferi deixar a thread rodando
+    pthread_detach(thread);
+}
+
+long long tempo_atual_nanossegundos() {
+    struct timespec tempo_atual;
+    clock_gettime(CLOCK_REALTIME, &tempo_atual);
+
+    // Converter segundos para nanossegundos e adicionar nanossegundos
+    return tempo_atual.tv_sec * BILLION + tempo_atual.tv_nsec;
+}
+
+//retorna o tempo atual em timespec
+struct timespec tempo_atual_timespec() {
+    struct timespec tempo_atual;
+    clock_gettime(CLOCK_REALTIME, &tempo_atual);
+
+    return tempo_atual;
+}
+
+
+char *tempo_para_varchar() {
+    struct timespec tempo_atual;
+    clock_gettime(CLOCK_REALTIME, &tempo_atual);
+
+    // Convertendo o tempo para uma string legível
+    char *tempo_varchar = (char *)malloc(MAX_STR_LEN * sizeof(char));
+    if (tempo_varchar == NULL) {
+        perror("Erro ao alocar memória");
+        exit(EXIT_FAILURE);
+    }
+
+    snprintf(tempo_varchar, MAX_STR_LEN, "%ld.%09ld", tempo_atual.tv_sec, tempo_atual.tv_nsec);
+
+    // Retornando a string de tempo
+    return tempo_varchar;
+}
+
+long long diferenca_tempo(struct timespec tempo1, struct timespec tempo2) {
+    long long diff_sec = (long long)(tempo1.tv_sec - tempo2.tv_sec);
+    long long diff_nsec = (long long)(tempo1.tv_nsec - tempo2.tv_nsec);
+    return diff_sec * 1000000000LL + diff_nsec;
+}
+char *diferenca_para_varchar(long long diferenca) {
+    char *tempo_varchar = (char *)malloc(MAX_STR_LEN * sizeof(char));
+    if (tempo_varchar == NULL) {
+        perror("Erro ao alocar memória");
+        exit(EXIT_FAILURE);
+    }
+    snprintf(tempo_varchar, MAX_STR_LEN, "%lld.%09lld", diferenca / 1000000000LL, diferenca % 1000000000LL);
+    return tempo_varchar;
+}
+
+
+struct timespec string_para_timespec(char *tempo_varchar) {
+    struct timespec tempo;
+    char *ponto = strchr(tempo_varchar, '.');
+    if (ponto != NULL) {
+        *ponto = '\0'; // separa os segundos dos nanossegundos
+        tempo.tv_sec = atol(tempo_varchar);
+        tempo.tv_nsec = atol(ponto + 1);
+    } else {
+        tempo.tv_sec = atol(tempo_varchar);
+        tempo.tv_nsec = 0;
+    }
+    return tempo;
 }
 
 int keepRunning = 1;
-void
-intHandler(int dummy)
+void intHandler(int dummy)
 {
-	keepRunning = 0;
-	fprintf(stderr, "\nclient exit(0).\n");
-	// nng_closeall();
-	exit(0);
+    keepRunning = 0;
+    fprintf(stderr, "\nclient exit(0).\n");
+    exit(0);
 }
 
 // Print the given string limited to 80 columns.
-//
-// The `prefix` should be a null terminated string much smaller than 80,
-// `str` and `len` designates the string to be printed, `quote` specifies
-// whether to print in single quotes.
-void
-print80(const char *prefix, const char *str, size_t len, bool quote)
+void print80(const char *prefix, const char *str, size_t len, bool quote)
 {
-	size_t max_len = 80 - strlen(prefix) - (quote ? 2 : 0);
-	char * q       = quote ? "'" : "";
-	if (len <= max_len) {
-		// case the output fit in a line
-		printf("%s%s%.*s%s\n", prefix, q, (int) len, str, q);
-	} else {
-		// case we truncate the payload with ellipses
-		printf(
-		    "%s%s%.*s%s...\n", prefix, q, (int) (max_len - 3), str, q);
-	}
+    size_t max_len = 80 - strlen(prefix) - (quote ? 2 : 0);
+    char *q = quote ? "'" : "";
+    if (len <= max_len) {
+        // case the output fit in a line
+        printf("%s%s%.*s%s\n", prefix, q, (int)len, str, q);
+    } else {
+        // case we truncate the payload with ellipses
+        printf("%s%s%.*s%s...\n", prefix, q, (int)(max_len - 3), str, q);
+    }
 }
 
-static void
-disconnect_cb(nng_pipe p, nng_pipe_ev ev, void *arg)
+static void disconnect_cb(nng_pipe p, nng_pipe_ev ev, void *arg)
 {
-	int reason = 0;
-	// get connect reason
-	nng_pipe_get_int(p, NNG_OPT_MQTT_DISCONNECT_REASON, &reason);
-	// property *prop;
-	// nng_pipe_get_ptr(p, NNG_OPT_MQTT_DISCONNECT_PROPERTY, &prop);
-	// nng_socket_get?
-	printf("%s: disconnected!\n", __FUNCTION__);
+    printf("Disconnected!\n");
 }
 
-static void
-connect_cb(nng_pipe p, nng_pipe_ev ev, void *arg)
+static void connect_cb(nng_pipe p, nng_pipe_ev ev, void *arg)
 {
-	int reason;
-	// get connect reason
-	nng_pipe_get_int(p, NNG_OPT_MQTT_CONNECT_REASON, &reason);
-	// get property for MQTT V5
-	// property *prop;
-	// nng_pipe_get_ptr(p, NNG_OPT_MQTT_CONNECT_PROPERTY, &prop);
-	printf("%s: connected!\n", __FUNCTION__);
+    printf("Connected!\n");
 }
 
-// Connect to the given address.
-int
-client_connect(
-    nng_socket *sock, nng_dialer *dialer, const char *url, bool verbose)
+int client_connect(nng_socket *sock, nng_dialer *dialer, const char *url, bool verbose)
 {
-	int        rv;
+    int rv;
 
-	if ((rv = nng_mqtt_client_open(sock)) != 0) {
-		fatal("nng_socket", rv);
-	}
+    if ((rv = nng_mqtt_client_open(sock)) != 0) {
+        fatal("nng_socket", rv);
+    }
 
-	if ((rv = nng_dialer_create(dialer, *sock, url)) != 0) {
-		fatal("nng_dialer_create", rv);
-	}
+    if ((rv = nng_dialer_create(dialer, *sock, url)) != 0) {
+        fatal("nng_dialer_create", rv);
+    }
 
-	// create a CONNECT message
-	/* CONNECT */
-	nng_msg *connmsg;
-	nng_mqtt_msg_alloc(&connmsg, 0);
-	nng_mqtt_msg_set_packet_type(connmsg, NNG_MQTT_CONNECT);
-	nng_mqtt_msg_set_connect_proto_version(connmsg, 4);
-	nng_mqtt_msg_set_connect_keep_alive(connmsg, 60);
-	nng_mqtt_msg_set_connect_user_name(connmsg, "nng_mqtt_client");
-	nng_mqtt_msg_set_connect_password(connmsg, "secrets");
-	nng_mqtt_msg_set_connect_will_msg(
-	    connmsg, (uint8_t *) "bye-bye", strlen("bye-bye"));
-	nng_mqtt_msg_set_connect_will_topic(connmsg, "will_topic");
-	nng_mqtt_msg_set_connect_clean_session(connmsg, true);
+    nng_msg *connmsg;
+    nng_mqtt_msg_alloc(&connmsg, 0);
+    nng_mqtt_msg_set_packet_type(connmsg, NNG_MQTT_CONNECT);
+    nng_mqtt_msg_set_connect_proto_version(connmsg, 4);
+    nng_mqtt_msg_set_connect_keep_alive(connmsg, 60);
+    nng_mqtt_msg_set_connect_user_name(connmsg, "nng_mqtt_client");
+    nng_mqtt_msg_set_connect_password(connmsg, "secrets");
+    nng_mqtt_msg_set_connect_clean_session(connmsg, true);
 
-	nng_mqtt_set_connect_cb(*sock, connect_cb, sock);
-	nng_mqtt_set_disconnect_cb(*sock, disconnect_cb, connmsg);
+    nng_mqtt_set_connect_cb(*sock, connect_cb, sock);
+    nng_mqtt_set_disconnect_cb(*sock, disconnect_cb, connmsg);
 
-	uint8_t buff[1024] = { 0 };
+    if (verbose) {
+        uint8_t buff[1024] = {0};
+        nng_mqtt_msg_dump(connmsg, buff, sizeof(buff), true);
+        printf("%s\n", buff);
+    }
 
-	if (verbose) {
-		nng_mqtt_msg_dump(connmsg, buff, sizeof(buff), true);
-		printf("%s\n", buff);
-	}
+    printf("Connecting to server ...\n");
+    nng_dialer_set_ptr(*dialer, NNG_OPT_MQTT_CONNMSG, connmsg);
+    nng_dialer_start(*dialer, NNG_FLAG_NONBLOCK);
 
-	printf("Connecting to server ...\n");
-	nng_dialer_set_ptr(*dialer, NNG_OPT_MQTT_CONNMSG, connmsg);
-	nng_dialer_start(*dialer, NNG_FLAG_NONBLOCK);
-
-	return (0);
+    return 0;
 }
 
-// Publish a message to the given topic and with the given QoS.
-int
-client_publish(nng_socket sock, const char *topic, uint8_t *payload,
-    uint32_t payload_len, uint8_t qos, bool verbose)
+static void send_callback(nng_mqtt_client *client, nng_msg *msg, void *arg)
 {
-	int rv;
-
-	// create a PUBLISH message
-	nng_msg *pubmsg;
-	nng_mqtt_msg_alloc(&pubmsg, 0);
-	nng_mqtt_msg_set_packet_type(pubmsg, NNG_MQTT_PUBLISH);
-	nng_mqtt_msg_set_publish_dup(pubmsg, 0);
-	nng_mqtt_msg_set_publish_qos(pubmsg, qos);
-	nng_mqtt_msg_set_publish_retain(pubmsg, 0);
-	nng_mqtt_msg_set_publish_payload(
-	    pubmsg, (uint8_t *) payload, payload_len);
-	nng_mqtt_msg_set_publish_topic(pubmsg, topic);
-
-	if (verbose) {
-		uint8_t print[1024] = { 0 };
-		nng_mqtt_msg_dump(pubmsg, print, 1024, true);
-		printf("%s\n", print);
-	}
-
-	printf("Publishing to '%s' ...\n", topic);
-	if ((rv = nng_sendmsg(sock, pubmsg, NNG_FLAG_NONBLOCK)) != 0) {
-		fatal("nng_sendmsg", rv);
-	}
-
-	return rv;
+    if (msg == NULL)
+        return;
+    
+    uint32_t count;
+    uint8_t *code;
+    
+    switch (nng_mqtt_msg_get_packet_type(msg)) {
+    case NNG_MQTT_SUBACK:
+        code = (reason_code *)nng_mqtt_msg_get_suback_return_codes(msg, &count);
+        printf("SUBACK reason codes are ");
+        for (int i = 0; i < count; ++i)
+            printf("%d \n", code[i]);
+        printf("\n");
+        break;
+    default:
+        printf("Sending in async way is done.\n");
+        break;
+    }
+    nng_msg_free(msg);
 }
 
-struct pub_params {
-	nng_socket *sock;
-	const char *topic;
-	uint8_t *   data;
-	uint32_t    data_len;
-	uint8_t     qos;
-	bool        verbose;
-	uint32_t    interval;
-};
-
-void
-publish_cb(void *args)
+int main(const int argc, const char **argv)
 {
-	int                rv;
-	struct pub_params *params = args;
-	do {
-		client_publish(*params->sock, params->topic, params->data,
-		    params->data_len, params->qos, params->verbose);
-		nng_msleep(params->interval);//tempo de espera entre publicações
-	} while (params->interval > 0);//o laço só para quando o intervalo for 0, ou seja, só publicar uma mensagem
-	printf("thread_exit\n");
-}
+    nng_socket sock;
+    nng_dialer dailer;
 
-struct pub_params params;
+    if (argc < 5 || argc > 6 || strcmp(argv[1], SUBSCRIBE) != 0) {
+        fprintf(stderr, "Usage: %s sub <URL> <QOS> <TOPIC> [REDIS_KEY]\n", argv[0]);
+        return 1;
+    }
+    const char *url = argv[2];
+    uint8_t qos = atoi(argv[3]);
+    const char *topic = argv[4];
+    const char *redis_key = (argc == 6) ? argv[5] : "valores"; // Chave Redis opcional
+    char *verbose_env = getenv("VERBOSE");
+    bool verbose = verbose_env && strlen(verbose_env) > 0;
 
-static int
-sqlite_config(nng_socket *sock, uint8_t proto_ver)
-{
-#if defined(NNG_SUPP_SQLITE)
-	int rv;
-	// create sqlite option
-	nng_mqtt_sqlite_option *sqlite;
-	if ((rv = nng_mqtt_alloc_sqlite_opt(&sqlite)) != 0) {
-		fatal("nng_mqtt_alloc_sqlite_opt", rv);
-	}
-	// set sqlite option
-	nng_mqtt_set_sqlite_enable(sqlite, true);
-	nng_mqtt_set_sqlite_flush_threshold(sqlite, 10);
-	nng_mqtt_set_sqlite_max_rows(sqlite, 20);
-	nng_mqtt_set_sqlite_db_dir(sqlite, "/tmp/nanomq");
+    client_connect(&sock, &dailer, url, verbose);
 
-	// init sqlite db
-	nng_mqtt_sqlite_db_init(sqlite, "mqtt_client.db", proto_ver);
+    signal(SIGINT, intHandler);
 
-	// set sqlite option pointer to socket
-	return nng_socket_set_ptr(*sock, NNG_OPT_MQTT_SQLITE, sqlite);
-#else
-	return (0);
-#endif
-}
+    nng_mqtt_topic_qos subscriptions[] = {
+        {
+            .qos = qos,
+            .topic = {
+                .buf = (uint8_t *)topic,
+                .length = strlen(topic),
+            },
+        },
+    };
 
-static void
-send_callback (nng_mqtt_client *client, nng_msg *msg, void *arg) {
-	nng_aio *        aio    = client->send_aio;
-	uint32_t         count;
-	uint8_t *        code;
-	uint8_t          type;
+    // Asynchronous subscription
+    nng_mqtt_client *client = nng_mqtt_client_alloc(sock, &send_callback, NULL, true);
+    nng_mqtt_subscribe_async(client, subscriptions,
+        sizeof(subscriptions) / sizeof(nng_mqtt_topic_qos), NULL);
 
-	if (msg == NULL)
-		return;
-	switch (nng_mqtt_msg_get_packet_type(msg)) {
-	case NNG_MQTT_SUBACK:
-		code = (reason_code *) nng_mqtt_msg_get_suback_return_codes(
-		    msg, &count);
-		printf("SUBACK reason codes are");
-		for (int i = 0; i < count; ++i)
-			printf("%d ", code[i]);
-		printf("\n");
-		break;
-	case NNG_MQTT_UNSUBACK:
-		code = (reason_code *) nng_mqtt_msg_get_unsuback_return_codes(
-		    msg, &count);
-		printf("UNSUBACK reason codes are");
-		for (int i = 0; i < count; ++i)
-			printf("%d ", code[i]);
-		printf("\n");
-		break;
-	case NNG_MQTT_PUBACK:
-		printf("PUBACK");
-		break;
-	default:
-		printf("Sending in async way is done.\n");
-		break;
-	}
-	printf("aio mqtt result %d \n", nng_aio_result(aio));
-	// printf("suback %d \n", *code);
-	nng_msg_free(msg);
-}
+    uint8_t buff[1024] = {0};
+    printf("Start receiving loop:\n");
+    while (keepRunning) {
+        nng_msg *msg;
+        uint8_t *payload;
+        uint32_t payload_len;
+        int rv;
+        struct timespec tempo_sub; // Variável para armazenar o tempo atual
+        struct timespec tempo_pub; // Variável para armazenar o tempo de publicação
+        long long diferenca;
+        if ((rv = nng_recvmsg(sock, &msg, 0)) != 0) {
+            fatal("nng_recvmsg", rv);
+            continue;
+        }
 
-int
-main(const int argc, const char **argv)
-{
-	nng_socket sock;
-	nng_dialer dailer;
+        // We should only receive publish messages
+        assert(nng_mqtt_msg_get_packet_type(msg) == NNG_MQTT_PUBLISH);
 
-	const char *exe = argv[0];
+        payload = nng_mqtt_msg_get_publish_payload(msg, &payload_len);
+        tempo_sub = tempo_atual_timespec();
+        tempo_pub = string_para_timespec(payload);
+        diferenca = diferenca_tempo(tempo_sub, tempo_pub);
+        char *valor_redis;
+        valor_redis = diferenca_para_varchar(diferenca);
+        
 
-	const char *cmd;
+        //printf("Received and save in redis: %s\n", valor_redis);//debug
+        //printf("\n chave redis: %s\n", redis_key);//debug
+        store_in_redis_async_call(valor_redis, redis_key);
 
-	if (5 == argc && 0 == strcmp(argv[1], SUBSCRIBE)) {
-		cmd = SUBSCRIBE;
-	} else if (6 <= argc && 0 == strcmp(argv[1], PUBLISH)) {
-		cmd = PUBLISH;
-	} else {
-		goto error;
-	}
+        print80("Received: ", (char *)payload, payload_len, true);
 
-	const char *url         = argv[2];
-	uint8_t     qos         = atoi(argv[3]);
-	const char *topic       = argv[4];
-	int         rv          = 0;
-	char *      verbose_env = getenv("VERBOSE");
-	bool        verbose     = verbose_env && strlen(verbose_env) > 0;
+        if (verbose) {
+            memset(buff, 0, sizeof(buff));
+            nng_mqtt_msg_dump(msg, buff, sizeof(buff), true);
+            printf("%s\n", buff);
+        }
 
-	client_connect(&sock, &dailer, url, verbose);
+        nng_msg_free(msg);
+    }
 
-	signal(SIGINT, intHandler);
-
-	if (strcmp(PUBLISH, cmd) == 0) {
-		const char *data     = argv[5];
-		uint32_t    interval = 0;
-		uint32_t    nthread  = 1;
-
-		if (argc >= 7) {
-			interval = atoi(argv[6]);
-		}
-		if (argc >= 8) {
-			nthread = atoi(argv[7]);
-		}
-		nng_thread *threads[nthread];
-
-		params.sock = &sock, params.topic = topic;
-		params.data     = (uint8_t *) data;
-		params.data_len = strlen(data);
-		params.qos      = qos;
-		params.interval = interval;
-		params.verbose  = verbose;
-
-		char thread_name[20];
-
-		sqlite_config(params.sock, MQTT_PROTOCOL_VERSION_v311);
-
-		size_t i = 0;
-		for (i = 0; i < nthread; i++) {
-			nng_thread_create(&threads[i], publish_cb, &params);
-		}
-
-		for (i = 0; i < nthread; i++) {
-			nng_thread_destroy(threads[i]);
-		}
-	} else if (strcmp(SUBSCRIBE, cmd) == 0) {
-		nng_mqtt_topic_qos subscriptions[] = {
-			{
-			    .qos   = qos,
-			    .topic = { 
-					.buf    = (uint8_t *) topic,
-			        .length = strlen(topic), 
-				},
-			},
-		};
-		nng_mqtt_topic unsubscriptions[] = {
-			{
-			    .buf    = (uint8_t *) topic,
-			    .length = strlen(topic),
-			},
-		};
-
-		// Sync subscription
-		// rv = nng_mqtt_subscribe(&sock, subscriptions, 1, NULL);
-
-		// Asynchronous subscription
-		nng_mqtt_client *client = nng_mqtt_client_alloc(sock, &send_callback, NULL, true);
-		nng_mqtt_subscribe_async(client, subscriptions,
-		    sizeof(subscriptions) / sizeof(nng_mqtt_topic_qos), NULL);
-
-		uint8_t buff[1024] = { 0 };
-		printf("Start receiving loop:\n");
-		while (true) {
-			nng_msg *msg;
-			uint8_t *payload;
-			uint32_t payload_len;
-			if ((rv = nng_recvmsg(sock, &msg, 0)) != 0) {
-				fatal("nng_recvmsg", rv);
-				continue;
-			}
-
-			// we should only receive publish messages
-			assert(nng_mqtt_msg_get_packet_type(msg) == NNG_MQTT_PUBLISH);
-
-			payload = nng_mqtt_msg_get_publish_payload(msg, &payload_len);
-
-			print80("Received: ", (char *) payload, payload_len, true);
-
-			if (verbose) {
-				memset(buff, 0, sizeof(buff));
-				nng_mqtt_msg_dump(msg, buff, sizeof(buff), true);
-				printf("%s\n", buff);
-			}
-
-			nng_msg_free(msg);
-			// break;
-		}
-
-		nng_mqtt_unsubscribe_async(client, unsubscriptions,
-		    sizeof(unsubscriptions) / sizeof(nng_mqtt_topic), NULL);
-	}
-
-	nng_msleep(1000);
-	// nng_mqtt_disconnect(&sock, 5, NULL);
-
-	return 0;
-
-error:
-	fprintf(stderr,
-	    "Usage: %s %s <URL> <QOS> <TOPIC> <data> <interval> <parallel>\n"
-	    "       %s %s <URL> <QOS> <TOPIC>\n",
-	    exe, PUBLISH, exe, SUBSCRIBE);
-	return 1;
+    return 0;
 }

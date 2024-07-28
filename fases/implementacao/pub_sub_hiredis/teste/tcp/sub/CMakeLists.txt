@@ -25,7 +25,7 @@ if (DEBUG)
 endif (DEBUG)
 
 add_executable(sub_tcp sub_tcp.c)
-target_link_libraries(sub_tcp nng::nng)
+target_link_libraries(sub_tcp nng::nng hiredis)
 target_link_libraries(sub_tcp ${CMAKE_THREAD_LIBS_INIT})
 
 
