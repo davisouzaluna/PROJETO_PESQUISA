@@ -231,11 +231,11 @@ int main(const int argc, const char **argv) {
     if (argc < 6 || 0 != strcmp(argv[1], PUBLISH)) {
         goto error;
     }
-
     const char *url = argv[2];
     uint8_t qos = atoi(argv[3]);
     const char *topic = argv[4];
     uint32_t interval_ms = atoi(argv[5]);
+    uint32_t num_packets = argc > 6 ? atoi(argv[6]) : 1; 
 
     int rv = 0;
     char *verbose_env = getenv("VERBOSE");
@@ -247,7 +247,18 @@ int main(const int argc, const char **argv) {
     // Setar a flag para tratamento de interrupção de saída com Ctrl+C
     signal(SIGINT, intHandler);
 
+    /*Parte do código onde é enviado os pacotes somente com um intervalo de tempo entre cada(laço infinito) 
+
     while (keepRunning) {
+        client_publish(sock, topic, qos, verbose);
+
+        if (interval_ms > 0) {
+            nng_msleep(interval_ms); // Espera o intervalo especificado antes de publicar novamente
+        }
+    }
+    */
+
+   for (uint32_t i = 0; i < num_packets && keepRunning; i++) {
         client_publish(sock, topic, qos, verbose);
 
         if (interval_ms > 0) {
@@ -262,6 +273,6 @@ int main(const int argc, const char **argv) {
     return 0;
 
 error:
-    fprintf(stderr, "Usage: %s %s url qos topic interval_ms\n", argv[0], PUBLISH);
+    fprintf(stderr, "Usage: %s %s url qos topic interval_ms [num_packets]\n", argv[0], PUBLISH);
     return 1;
 }
