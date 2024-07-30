@@ -26,6 +26,12 @@ void fatal(const char *msg, int rv)
     fprintf(stderr, "%s: %s\n", msg, nng_strerror(rv));
 }
 
+typedef struct {
+    nng_socket sock;
+    nng_dialer dialer;
+    const char *url;
+} reconnect_info;
+
 int keepRunning = 1;
 void intHandler(int dummy)
 {
@@ -40,8 +46,18 @@ static void disconnect_cb(nng_pipe p, nng_pipe_ev ev, void *arg)
     int reason = 0;
     nng_pipe_get_int(p, NNG_OPT_MQTT_DISCONNECT_REASON, &reason);
     printf("%s: disconnected! RC [%d] \n", __FUNCTION__, reason);
-    (void) ev;
-    (void) arg;
+
+    reconnect_info *info = (reconnect_info *)arg;
+
+    int rv;
+    printf("Attempting to reconnect...\n");
+
+    // Attempt to restart the dialer
+    if ((rv = nng_dialer_start((info->dialer), NNG_FLAG_NONBLOCK)) != 0) {
+        fprintf(stderr, "nng_dialer_start: %s\n", nng_strerror(rv));
+    } else {
+        printf("Reconnection successful.\n");
+    }
 }
 
 static void connect_cb(nng_pipe p, nng_pipe_ev ev, void *arg)
@@ -137,8 +153,9 @@ out:
 // Declare client_publish and tempo_para_varchar before their usage
 int client_publish(nng_socket sock, const char *topic, uint8_t qos, bool verbose);
 char *tempo_para_varchar(void);
+int pub_time_packets(nng_socket sock, const char *topic, uint8_t qos, bool verbose, uint32_t interval, uint32_t num_packets);
 
-int tls_client(const char *url, uint8_t proto_ver, const char *ca, const char *cert, const char *key, const char *pass)
+int tls_client(const char *url, uint8_t proto_ver, const char *ca, const char *cert, const char *key, const char *pass, const char *topic, uint8_t qos, bool verbose, uint32_t interval, uint32_t num_packets)
 {
     nng_socket sock;
     nng_dialer dialer;
@@ -164,6 +181,7 @@ int tls_client(const char *url, uint8_t proto_ver, const char *ca, const char *c
     nng_mqtt_msg_set_connect_password(msg, "emqx123");
 
     nng_mqtt_set_connect_cb(sock, connect_cb, &sock);
+    reconnect_info info = { sock, dialer, url };
     nng_mqtt_set_disconnect_cb(sock, disconnect_cb, NULL);
 
     if ((rv = nng_dialer_create(&dialer, sock, url)) != 0) {
@@ -178,13 +196,26 @@ int tls_client(const char *url, uint8_t proto_ver, const char *ca, const char *c
     if ((rv = nng_dialer_start(dialer, NNG_FLAG_ALLOC)) != 0){
         fatal("nng_dialer_start", rv);
     }
+    
+    pub_time_packets(sock, topic, qos, verbose, interval, num_packets);
+    
+    nng_msg_free(msg);
+    
+    
+}
 
-    const char *topic = "teste_davi";
-    client_publish(sock, topic, 0, false);
-
-    for (;;) {
-        nng_msleep(3600000); // neither pause() nor sleep() portable
+//Latency test(publish packets in a given interval)
+int pub_time_packets(nng_socket sock, const char *topic, uint8_t qos, bool verbose, uint32_t interval, uint32_t num_packets) {
+    for (uint32_t i=0;i<num_packets && keepRunning;i++){ {
+        client_publish(sock, topic, qos, verbose);
+        
+        if(interval>0){
+            nng_msleep(interval);
+            }  
+    
+        }
     }
+    return 0;
 }
 
 // Publish a message to the given topic and with the given QoS.
@@ -225,6 +256,8 @@ int client_publish(nng_socket sock, const char *topic, uint8_t qos, bool verbose
     return rv;
 }
 
+
+
 char *tempo_para_varchar() {
     struct timespec tempo_atual;
     clock_gettime(CLOCK_REALTIME, &tempo_atual);
@@ -244,7 +277,26 @@ char *tempo_para_varchar() {
 
 void usage()
 {
-    fprintf(stderr, "Usage: mqtt_client [-u URL] [-c CAFILE] [-t CERT] [-k KEY] [-p PASS] [-v VERSION]\n");
+    fprintf(stderr, "Usage: ./tls [-u URL] [-a CAFILE] [-c CERT] [-k KEY] [-p PASS] [-v VERSION]\n");
+    exit(1);
+}
+
+void usage_definition(){
+    fprintf(stderr, "Usage: tls [-u URL] [-c CAFILE] [-t CERT] [-k KEY] [-p PASS] [-v VERSION]\n");
+    fprintf(stderr, "  example: tls -u tls+mqtt-tcp://broker.emqx.io:8883 \n");
+    fprintf(stderr, "Options:\n");
+    fprintf(stderr, "  -u URL      URL of the MQTT broker. Use the port 8883 and tls+mqtt-tcp to url protocol\n");
+    fprintf(stderr, "  -a CAFILE   CA certificate file\n");
+    fprintf(stderr, "  -c CERT     client certificate file\n");
+    fprintf(stderr, "  -k KEY      client private key file\n");
+    fprintf(stderr, "  -p PASS     client private key password\n");
+    fprintf(stderr, "  -v VERSION  MQTT protocol version (default: 4)\n");
+    fprintf(stderr, "  -h          Show this help\n");
+    fprintf(stderr, "  -t TOPIC    Topic to publish\n");
+    fprintf(stderr, "  -t TOPIC    Topic to publish\n");
+    fprintf(stderr, "  -q QOS      QoS level (default: 0)\n");
+    fprintf(stderr, "  -i INTERVAL Interval between packets in milliseconds (default: 1000)\n");
+    fprintf(stderr, "  -n NUM      Number of packets to send (default: 1)\n");
     exit(1);
 }
 
@@ -257,19 +309,31 @@ int main(int argc, char const *argv[])
     char *cert = NULL;
     char *key = NULL;
     char *key_psw = NULL;
-    uint8_t proto_ver = MQTT_PROTOCOL_VERSION_v311;
+    uint8_t proto_ver = MQTT_PROTOCOL_VERSION_v311;//default version is 4
     int opt;
-    const char topic;
+
+    // Elements for latency test
+    const char *topic;
+    topic = "teste_davi";
+    uint8_t qos = 0; //default qos is 0
+    uint32_t interval = 1000; //default interval is 1000 ms or 1 second
+    uint32_t num_packets = 1; //default number of packets is 1
+    bool verbose = false;
+
 
     signal(SIGINT, intHandler);
     signal(SIGTERM, intHandler);
 
-    while ((opt = getopt(argc, (char *const *)argv, "c:t:k:u:p:v:")) != -1) {
+    while ((opt = getopt(argc, (char *const *)argv, "a:c:k:u:p:v:t:q:i:n:")) != -1) {
         switch (opt) {
-        case 'c':
+        case '?':
+		case 'h':
+			usage_definition();
+			exit(0);
+        case 'a':
             cafile = optarg;
             break;
-        case 't':
+        case 'c':
             cert = optarg;
             break;
         case 'k':
@@ -284,8 +348,22 @@ int main(int argc, char const *argv[])
         case 'v':
             proto_ver = atoi(optarg);
             break;
+             case 't':
+            topic = optarg;
+            break;
+        case 'q':
+            qos = atoi(optarg);
+            break;
+        case 'i':
+            interval = atoi(optarg);
+            break;  
+        case 'n':
+            num_packets = atoi(optarg);
+            break;
         default:
+            fprintf(stderr, "invalid argument: '%c'\n", opt);
             usage();
+            exit(1);
         }
     }
 
@@ -303,7 +381,7 @@ int main(int argc, char const *argv[])
         loadfile(key, (void **)&key, &file_len);
     }
 
-    if (tls_client(url, proto_ver, cafile, cert, key, key_psw) != 0) {
+    if (tls_client(url, proto_ver, cafile, cert, key, key_psw, topic, qos, verbose, interval, num_packets) != 0) {
         fprintf(stderr, "Error: tls_client\n");
         return 1;
     }
