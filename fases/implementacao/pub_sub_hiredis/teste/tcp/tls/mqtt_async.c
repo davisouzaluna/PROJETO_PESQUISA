@@ -7,10 +7,27 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#include <time.h>
+#include <signal.h>
 
 #include <nng/mqtt/mqtt_client.h>
 #include <nng/nng.h>
 #include <nng/supplemental/util/platform.h>
+
+
+#define MAX_STR_LEN 30
+#ifndef CLOCK_REALTIME
+#define CLOCK_REALTIME 0
+#endif
+
+#define BILLION 1000000000
+
+const char *g_topic;
+uint8_t g_qos;
+bool g_verbose;
+uint32_t interval_ms;
+uint32_t num_packets;
+
 
 #ifdef NNG_SUPP_TLS
 #include <nng/supplemental/tls/tls.h>
@@ -37,6 +54,76 @@ void
 fatal(const char *msg, int rv)
 {
 	fprintf(stderr, "%s: %s\n", msg, nng_strerror(rv));
+}
+
+long long tempo_atual_nanossegundos() {
+    struct timespec tempo_atual;
+    clock_gettime(CLOCK_REALTIME, &tempo_atual);
+
+    // Converter segundos para nanossegundos e adicionar nanossegundos
+    return tempo_atual.tv_sec * BILLION + tempo_atual.tv_nsec;
+}
+
+char *tempo_para_varchar() {
+    struct timespec tempo_atual;
+    clock_gettime(CLOCK_REALTIME, &tempo_atual);
+
+    // Convertendo o tempo para uma string legível
+    char *tempo_varchar = (char *)malloc(MAX_STR_LEN * sizeof(char));
+    if (tempo_varchar == NULL) {
+        perror("Erro ao alocar memória");
+        exit(EXIT_FAILURE);
+    }
+
+    snprintf(tempo_varchar, MAX_STR_LEN, "%ld.%09ld", tempo_atual.tv_sec, tempo_atual.tv_nsec);
+
+    // Retornando a string de tempo
+    return tempo_varchar;
+}
+
+int keepRunning = 1;
+void intHandler(int dummy) {
+    keepRunning = 0;
+    fprintf(stderr, "\nclient exit(0).\n");
+    exit(0);
+}
+
+// Publish a message to the given topic and with the given QoS.
+int client_publish(nng_socket sock, const char *topic, uint8_t qos, bool verbose) {
+    int rv;
+
+    // Criar uma mensagem PUBLISH
+    nng_msg *pubmsg;
+    nng_mqtt_msg_alloc(&pubmsg, 0);
+    nng_mqtt_msg_set_packet_type(pubmsg, NNG_MQTT_PUBLISH);
+    nng_mqtt_msg_set_publish_dup(pubmsg, 0);
+    nng_mqtt_msg_set_publish_qos(pubmsg, qos);
+    nng_mqtt_msg_set_publish_retain(pubmsg, 0);
+
+    // Gerar o timestamp atual e usá-lo como payload
+    char *tempo_atual_varchar = tempo_para_varchar();
+    nng_mqtt_msg_set_publish_payload(pubmsg, (uint8_t *)tempo_atual_varchar, strlen(tempo_atual_varchar));
+
+    // Definir o tópico da mensagem
+    nng_mqtt_msg_set_publish_topic(pubmsg, topic);
+
+    if (verbose) {
+        uint8_t print[1024] = {0};
+        nng_mqtt_msg_dump(pubmsg, print, 1024, true);
+        printf("%s\n", print);
+    }
+
+    printf("Publishing to '%s' with timestamp '%s'...\n", topic, tempo_atual_varchar);
+
+    // Enviar a mensagem
+    if ((rv = nng_sendmsg(sock, pubmsg, NNG_FLAG_NONBLOCK)) != 0) {
+        fatal("nng_sendmsg", rv);
+    }
+
+    // Liberar a memória alocada para o timestamp
+    free(tempo_atual_varchar);
+
+    return rv;
 }
 
 void
@@ -416,6 +503,9 @@ tls_client(const char *url, uint8_t proto_ver, const char *ca,
 	for (i = 0; i < nwork; i++) {
 		works[i] = alloc_work(sock);
 	}
+	char *verbose_env = getenv("VERBOSE");
+    bool verbose = (verbose_env != NULL && strcmp(verbose_env, "1") == 0);
+	//CONNECT Message
 	// Mqtt connect message
 	nng_msg *msg;
 	nng_mqtt_msg_alloc(&msg, 0);
@@ -437,14 +527,27 @@ tls_client(const char *url, uint8_t proto_ver, const char *ca,
 		fatal("init_dialer_tls", rv);
 	}
 
-	nng_dialer_set_ptr(dialer, NNG_OPT_MQTT_CONNMSG, msg);
+	
 	if ((rv = nng_dialer_start(dialer, NNG_FLAG_ALLOC)) != 0){
 		fatal("nng_dialer_start", rv);
 	}
 
+	
+
 	for (i = 0; i < nwork; i++) {
 		client_cb(works[i]);
 	}
+	// Setar a flag para tratamento de interrupção de saída com Ctrl+C
+	signal(SIGINT, intHandler);
+
+	for (uint32_t i = 0; i < num_packets && keepRunning; i++) {
+        client_publish(sock, g_topic, g_qos, verbose);
+
+        if (interval_ms > 0) {
+            nng_msleep(interval_ms); // Espera o intervalo especificado antes de publicar novamente
+        }
+    }
+
 
 	for (;;) {
 		nng_msleep(3600000); // neither pause() nor sleep() portable
@@ -483,6 +586,12 @@ main(int argc, char **argv)
 	char *  key        = NULL;
 	char *  key_psw    = NULL;
 	uint8_t proto_ver  = MQTT_PROTOCOL_VERSION_v311;
+
+	g_topic = "teste_davi";
+	g_qos = 0;
+	g_verbose = false;
+	num_packets = 20;
+	interval_ms = 1000;
 
 	int   opt;
 	int   digit_optind  = 0;

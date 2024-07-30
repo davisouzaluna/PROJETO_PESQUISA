@@ -6,7 +6,7 @@
 
 cmake_minimum_required(VERSION 3.13)
 
-project(mqtt_async)
+project(tls)
 set(MBEDTLS_ROOT_DIR "../../mbedtls/cmake")
 if (BUILD_DEMO)
 else ()
@@ -30,19 +30,19 @@ if (DEBUG)
   endif (TSAN)
 endif (DEBUG)
 
-add_executable(mqtt_async mqtt_async.c)
-target_link_libraries(mqtt_async nng::nng)
-target_link_libraries(mqtt_async ${CMAKE_THREAD_LIBS_INIT})
+add_executable(tls tls.c)
+target_link_libraries(tls nng::nng)
+target_link_libraries(tls ${CMAKE_THREAD_LIBS_INIT})
 
 if(NNG_ENABLE_TLS)
     find_package(MbedTLS)
-    target_link_libraries(mqtt_async mbedtls mbedx509 mbedcrypto)
+    target_link_libraries(tls mbedtls mbedx509 mbedcrypto)
     add_definitions(-DNNG_SUPP_TLS)
 endif()
 
 if (NNG_ENABLE_SQLITE)
     add_definitions(-DNNG_SUPP_SQLITE)
-    target_link_libraries(mqtt_async dl)
+    target_link_libraries(tls dl)
 endif (NNG_ENABLE_SQLITE)
 
-target_compile_definitions(mqtt_async PRIVATE NNG_ELIDE_DEPRECATED)
+target_compile_definitions(tls PRIVATE NNG_ELIDE_DEPRECATED)
