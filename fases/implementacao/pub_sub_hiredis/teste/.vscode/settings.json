@@ -9,6 +9,7 @@
         "nng.h": "c",
         "assert.h": "c",
         "time.h": "c",
-        "platform.h": "c"
+        "platform.h": "c",
+        "stdio.h": "c"
     }
 }
