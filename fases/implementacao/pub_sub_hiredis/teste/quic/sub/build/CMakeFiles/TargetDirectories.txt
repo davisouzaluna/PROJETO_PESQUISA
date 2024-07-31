@@ -1,3 +1,0 @@
-/home/davi/PROJETO_PESQUISA/fases/implementacao/pub_sub_hiredis/teste/quic/sub/build/CMakeFiles/sub.dir
-/home/davi/PROJETO_PESQUISA/fases/implementacao/pub_sub_hiredis/teste/quic/sub/build/CMakeFiles/edit_cache.dir
-/home/davi/PROJETO_PESQUISA/fases/implementacao/pub_sub_hiredis/teste/quic/sub/build/CMakeFiles/rebuild_cache.dir
