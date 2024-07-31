@@ -247,7 +247,7 @@ client(int type, const char *url, const char *qos, const char *topic, const char
 static void
 printf_helper(char *exec)
 {
-	fprintf(stderr, "Usage: %s <url> <qos> <topic> <time_pub>\n", exec);
+	fprintf(stderr, "Usage: %s <url> <qos> <topic> <num_packets>\n", exec);
 	//fprintf(stderr, "Usage: %s <url> <qos> <topic>\n", exec);
 	exit(EXIT_FAILURE);
 }

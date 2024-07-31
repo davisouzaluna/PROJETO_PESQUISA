@@ -1,2 +1,0 @@
- ./mqtt_async -u mqtts://broker.emqx.io:8883 -a ../certs/broker.emqx.io-ca.crt
-

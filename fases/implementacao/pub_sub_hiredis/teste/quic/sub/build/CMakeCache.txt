@@ -224,15 +224,6 @@ PKG_CONFIG_ARGN:STRING=
 //pkg-config executable
 PKG_CONFIG_EXECUTABLE:FILEPATH=/usr/bin/pkg-config
 
-//Path to a library.
-TestLibrary:FILEPATH=TestLibrary-NOTFOUND
-
-//The directory containing a CMake configuration file for hiredis.
-hiredis_DIR:PATH=/usr/local/lib/cmake/hiredis
-
-//The directory containing a CMake configuration file for lib_teste.
-lib_teste_DIR:PATH=/usr/local/lib/cmake/lib_teste
-
 //The directory containing a CMake configuration file for msquic.
 msquic_DIR:PATH=/usr/local/share/msquic
 
