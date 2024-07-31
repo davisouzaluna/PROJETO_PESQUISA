@@ -422,12 +422,12 @@ int tls_client(const char *url, uint8_t proto_ver, const char *ca, const char *c
 
 void usage()
 {
-    fprintf(stderr, "Usage: ./tls [-u URL] [-a CAFILE] [-c CERT] [-k KEY] [-p PASS] [-v VERSION]\n");
+    fprintf(stderr, "Usage: ./sub_tls [-u URL] [-a CAFILE] [-c CERT] [-k KEY] [-p PASS] [-v VERSION] [-t TOPIC] [-q  QOS] [-r REDIS_KEY]\n");
     exit(1);
 }
 
 void usage_definition(){
-    fprintf(stderr, "Usage: tls [-u URL] [-c CAFILE] [-t CERT] [-k KEY] [-p PASS] [-v VERSION]\n");
+    fprintf(stderr, "Usage: sub_tls [-u URL] [-c CAFILE] [-t CERT] [-k KEY] [-p PASS] [-v VERSION] [-t TOPIC] [-q  QOS] [-r REDIS_KEY]\n");
     fprintf(stderr, "  example: tls -u tls+mqtt-tcp://broker.emqx.io:8883 \n");
     fprintf(stderr, "Options:\n");
     fprintf(stderr, "  -u URL      URL of the MQTT broker. Use the port 8883 and tls+mqtt-tcp to url protocol\n");
@@ -438,10 +438,8 @@ void usage_definition(){
     fprintf(stderr, "  -v VERSION  MQTT protocol version (default: 4)\n");
     fprintf(stderr, "  -h          Show this help\n");
     fprintf(stderr, "  -t TOPIC    Topic to publish\n");
-    fprintf(stderr, "  -t TOPIC    Topic to publish\n");
     fprintf(stderr, "  -q QOS      QoS level (default: 0)\n");
-    fprintf(stderr, "  -i INTERVAL Interval between packets in milliseconds (default: 1000)\n");
-    fprintf(stderr, "  -n NUM      Number of packets to send (default: 1)\n");
+    fprintf(stderr, "  -r REDISKEY Redis key to save the latency (default: valores)\n");
     exit(1);
 }
 
@@ -459,7 +457,7 @@ int main(int argc, char const *argv[])
 
     // Elements for latency test
     const char *topic;
-    topic = "teste_davi";
+    topic = "teste_davi"; //TOPICO PADRAO PARA O TOPICO
     uint8_t qos = 0; //default qos is 0
     bool verbose = false;
     const char *redis_key = "valores"; //chave padrão para o redis

@@ -9,7 +9,7 @@ Nessa implementação, é enviado o tempo atual em nanosegundos para um dado tó
 - Caso você queira publicar no tópico `teste/quic`, na url do broker `mqtt-quic://broker.emqx.io:14567` e com o qos `0` e que queira publicar 1000 pacotes:
 
     ```bash
-    ./publisher mqtt-quic://broker.emqx.io:14567 0 teste/quic 1000
+    ./publisher mqtt-quic://broker.emqx.io:14567 0 teste/quic 1000 10
     ```
 
 - Ele vai se conectar no broker:

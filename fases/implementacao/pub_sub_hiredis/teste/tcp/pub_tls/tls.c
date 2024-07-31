@@ -277,12 +277,12 @@ char *tempo_para_varchar() {
 
 void usage()
 {
-    fprintf(stderr, "Usage: ./tls [-u URL] [-a CAFILE] [-c CERT] [-k KEY] [-p PASS] [-v VERSION]\n");
+    fprintf(stderr, "Usage: ./tls [-u URL] [-a CAFILE] [-c CERT] [-k KEY] [-p PASS] [-v VERSION] [-t TOPIC] [-q QOS] [-i INTERVAL] [-n NUMBER_PACKETS]\n");
     exit(1);
 }
 
 void usage_definition(){
-    fprintf(stderr, "Usage: tls [-u URL] [-c CAFILE] [-t CERT] [-k KEY] [-p PASS] [-v VERSION]\n");
+    fprintf(stderr, "Usage: tls [-u URL] [-c CAFILE] [-t CERT] [-k KEY] [-p PASS] [-v VERSION] [-t TOPIC] [-q QOS] [-i INTERVAL] [-n NUMBER_PACKETS]\n");
     fprintf(stderr, "  example: tls -u tls+mqtt-tcp://broker.emqx.io:8883 \n");
     fprintf(stderr, "Options:\n");
     fprintf(stderr, "  -u URL      URL of the MQTT broker. Use the port 8883 and tls+mqtt-tcp to url protocol\n");
@@ -292,7 +292,6 @@ void usage_definition(){
     fprintf(stderr, "  -p PASS     client private key password\n");
     fprintf(stderr, "  -v VERSION  MQTT protocol version (default: 4)\n");
     fprintf(stderr, "  -h          Show this help\n");
-    fprintf(stderr, "  -t TOPIC    Topic to publish\n");
     fprintf(stderr, "  -t TOPIC    Topic to publish\n");
     fprintf(stderr, "  -q QOS      QoS level (default: 0)\n");
     fprintf(stderr, "  -i INTERVAL Interval between packets in milliseconds (default: 1000)\n");

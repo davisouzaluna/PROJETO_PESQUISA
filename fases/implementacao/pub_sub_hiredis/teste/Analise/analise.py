@@ -7,15 +7,23 @@ from docx import Document
 from docx.shared import Inches
 import os
 
-# Nome da chave Redis
-redis_key = 'quic'
+# Conectar ao Redis
+r = redis.Redis(host='localhost', port=6379, db=0)
+
+# Obter todas as chaves
+keys = r.keys('*')
+
+# Exibir todas as chaves e permitir ao usuário escolher uma
+print("Chaves no Redis:")
+for i, key in enumerate(keys):
+    print(f"{i + 1}. {key.decode('utf-8')}")
+
+choice = int(input("Escolha uma chave digitando o número correspondente: ")) - 1
+redis_key = keys[choice].decode('utf-8')
 
 # Criar diretório para armazenar os arquivos
 output_dir = f'{redis_key}'
 os.makedirs(output_dir, exist_ok=True)
-
-# Conectar ao Redis
-r = redis.Redis(host='localhost', port=6379, db=0)
 
 # Recuperar os dados da chave Redis
 latencies = r.lrange(redis_key, 0, -1)

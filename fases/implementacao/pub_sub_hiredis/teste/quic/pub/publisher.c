@@ -149,13 +149,14 @@ void publish(const char *topic, int q){
 };
 
 int
-client(int type, const char *url, const char *qos, const char *topic, const char *numero_pub)
+client(int type, const char *url, const char *qos, const char *topic, const char *numero_pub, const char *interval)
 {
+
 	nng_socket  sock;
 	int         rv, sz, q, qpub, i;
 	nng_msg *   msg;
 	const char *arg = "CLIENT FOR QUIC";
-
+	uint32_t intervalo = atoi(interval);
 	/*
 	// Open a quic socket without configuration
 	if ((rv = nng_mqtt_quic_client_open(&sock, url)) != 0) {
@@ -216,7 +217,7 @@ client(int type, const char *url, const char *qos, const char *topic, const char
 		
 
 			publish(topic,q);
-			nng_msleep(10);//necessário um atraso pro subscriber poder lidar com as mensagens
+			nng_msleep(intervalo);//necessário um atraso pro subscriber poder lidar com as mensagens
 			//printf("Publicação %d\n", i+1);
 		//msg = mqtt_msg_compose(PUB, q, (char *)topic, (char *)data);
 		//nng_sendmsg(*g_sock, msg, NNG_FLAG_ALLOC);
@@ -247,17 +248,18 @@ client(int type, const char *url, const char *qos, const char *topic, const char
 static void
 printf_helper(char *exec)
 {
-	fprintf(stderr, "Usage: %s <url> <qos> <topic> <num_packets>\n", exec);
+	fprintf(stderr, "Usage: %s <url> <qos> <topic> <num_packets> <interval>\n", exec);
 	//fprintf(stderr, "Usage: %s <url> <qos> <topic>\n", exec);
 	exit(EXIT_FAILURE);
 }
 
 int main(int argc, char **argv) {
-    if (argc < 4) {
+    if (argc < 5) {
         goto error;
     }
+	
     //client(PUB, argv[1], argv[2], argv[3], argv[4], argv[5]);
-	client(PUB, argv[1], argv[2], argv[3], argv[4]);
+	client(PUB, argv[1], argv[2], argv[3], argv[4], argv[5]);
     
     return 0;
 
