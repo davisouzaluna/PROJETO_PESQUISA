@@ -42,7 +42,7 @@ skewness_latency = skew(latencies)
 kurtosis_latency = kurtosis(latencies)
 
 # Gerar e Salvar Gráficos
-plt.style.use('seaborn-darkgrid')  # Usar estilo do seaborn para gráficos bonitos
+plt.style.use('ggplot')  # Usar estilo do seaborn para gráficos bonitos
 
 # Histograma
 plt.figure(figsize=(12, 8))
