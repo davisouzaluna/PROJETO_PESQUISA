@@ -43,7 +43,7 @@ if(OPENSSL_FOUND)
 endif()
 
 
-target_link_libraries(sub nng::nng msquic pthread hiredis testlibrary)
+target_link_libraries(sub nng::nng msquic pthread hiredis)
 target_compile_definitions(sub PRIVATE NNG_ELIDE_DEPRECATED)
 
 if (NNG_ENABLE_SQLITE)

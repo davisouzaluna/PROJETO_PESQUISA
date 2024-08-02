@@ -25,7 +25,7 @@ dependencies=(
     ninja-build
     libc6-dev
     gcc-multilib
-    pip-python3
+    python3-pip
 )
 
 # Verifica e instala cada dependência
@@ -130,9 +130,10 @@ else
         cd NanoSDK
         mkdir -p build
         cd build
-        cmake -G Ninja -DBUILD_SHARED_LIBS=OFF -DNNG_ENABLE_QUIC=ON -DNNG_ENABLE_TLS=ON ..
-        ninja
-        sudo ninja install
-        cd ../..
+        #cmake -G Ninja -DBUILD_SHARED_LIBS=OFF -DNNG_ENABLE_QUIC=ON -DNNG_ENABLE_TLS=ON ..
+        #ninja
+        #sudo ninja install
+        #cd ../..
+	cd ..
     fi
 fi
