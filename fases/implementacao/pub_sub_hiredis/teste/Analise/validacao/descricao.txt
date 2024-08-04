@@ -1,0 +1,49 @@
+
+
+
+Teste 1 com MQTT/TCP:
+
+Data/Hora: 
+N° de pacotes: 1.000;
+Volume de pacotes: tcpdump -ni <interface> port <porta> -w <arquivo.pcap> para salvar o arquivo
+Concorrência: Não
+Atraso: 50 ms
+
+No broker:
+startar o emqx;
+tcpdump -ni <interface> port <porta> -w <arquivo.pcap>
+tcpdump -ni enp0s3 port 1883 -w 1kpackets_tcp_50ms.pcap
+	
+	
+
+No publisher:
+./publisher mqtt-tcp://10.35.5.57:1883 0 1000_packets_50ms_tcp 1000 50
+
+	No subscriber:
+./sub sub "mqtt-tcp://10.35.5.57:1883" 0 1000_packets_50ms_tcp 1000_packets_50ms_tcp
+
+
+
+
+Teste 2 com MQTT/TCP:
+
+Data/Hora: 
+N° de pacotes: 10.000;
+Volume de pacotes: tcpdump -ni <interface> port <porta> -w <arquivo.pcap> para salvar o arquivo
+Concorrência: Não
+Atraso: 50 ms
+
+No broker:
+startar o emqx;
+tcpdump -ni <interface> port <porta> -w <arquivo.pcap>
+tcpdump -ni enp0s3 port 1883 -w 10kpackets_tcp_50ms.pcap
+	
+	
+
+No publisher:
+./publisher mqtt-tcp://10.35.5.57:1883 0 10000_packets_50ms_tcp 10000 50
+
+	No subscriber:
+./sub sub "mqtt-tcp://10.35.5.57:1883" 0 10000_packets_50ms_quic 10000_packets_50ms_tcp
+
+
