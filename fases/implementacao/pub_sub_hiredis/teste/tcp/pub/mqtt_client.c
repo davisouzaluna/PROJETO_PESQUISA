@@ -29,6 +29,8 @@
 // Subcommand
 #define PUBLISH "pub"
 
+double time_connection;
+
 void fatal(const char *msg, int rv) {
     fprintf(stderr, "%s: %s\n", msg, nng_strerror(rv));
 }
@@ -80,6 +82,8 @@ int client_connect(nng_socket *sock, nng_dialer *dialer, const char *url, bool v
         fatal("nng_dialer_create", rv);
     }
 
+    
+    
     // create a CONNECT message
     /* CONNECT */
     nng_msg *connmsg;
@@ -93,9 +97,25 @@ int client_connect(nng_socket *sock, nng_dialer *dialer, const char *url, bool v
     nng_mqtt_msg_set_connect_will_topic(connmsg, "will_topic");
     nng_mqtt_msg_set_connect_clean_session(connmsg, true);
 
+    
+
+    
+
     printf("Connecting to server ...\n");
+    // Marcar o início do tempo
+    struct timespec start_time, end_time;
+    clock_gettime(CLOCK_REALTIME, &start_time);
+
     nng_dialer_set_ptr(*dialer, NNG_OPT_MQTT_CONNMSG, connmsg);
     nng_dialer_start(*dialer, NNG_FLAG_NONBLOCK);
+    clock_gettime(CLOCK_REALTIME, &end_time);
+
+    // Calcular a diferença
+    long seconds = end_time.tv_sec - start_time.tv_sec;
+    long nanoseconds = end_time.tv_nsec - start_time.tv_nsec;
+    double elapsed = seconds + nanoseconds*1e-9;
+    time_connection = elapsed;
+    printf("Time taken to connect: %.9f seconds\n", elapsed);
 
     return (0);
 }
@@ -205,6 +225,7 @@ int main(const int argc, const char **argv) {
             nng_msleep(interval_ms); // Espera o intervalo especificado antes de publicar novamente
         }
     }
+    printf("Time taken to connect: %.9f seconds\n", time_connection);
 
     if ((rv = nng_close(sock)) != 0) {
         fatal("nng_close", rv);

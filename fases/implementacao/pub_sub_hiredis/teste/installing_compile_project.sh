@@ -26,6 +26,8 @@ dependencies=(
     libc6-dev
     gcc-multilib
     python3-pip
+    libgconf2-dev
+    ntp # para sincronização de tempo
 )
 
 # Verifica e instala cada dependência

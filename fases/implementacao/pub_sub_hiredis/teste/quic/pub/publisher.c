@@ -27,6 +27,8 @@ static nng_socket * g_sock;
 #define SUB 2
 #define PUB 3
 
+double time_connection;
+
 conf_quic config_user = {
 	.tls = {
 		.enable = false,
@@ -183,10 +185,22 @@ client(int type, const char *url, const char *qos, const char *topic, const char
 		printf("error in quic client cb set.\n");
 	}
 	g_sock = &sock;
+
+	//Teste para descobrir o tempo de envio da mensagem de conexão
+
 	// MQTT Connect...
 	msg = mqtt_msg_compose(CONN, 0, NULL, NULL);
+	// Marcar o início do tempo
+    struct timespec start_time, end_time;
+    clock_gettime(CLOCK_REALTIME, &start_time);
 	nng_sendmsg(sock, msg, NNG_FLAG_ALLOC);
-
+	clock_gettime(CLOCK_REALTIME, &end_time);
+	// Calcular a diferença
+    long seconds = end_time.tv_sec - start_time.tv_sec;
+    long nanoseconds = end_time.tv_nsec - start_time.tv_nsec;
+    double elapsed = seconds + nanoseconds*1e-9;
+    time_connection = elapsed;
+    printf("Time taken to connect: %.9f seconds\n", elapsed);
 
 	if (qos) {
 		q = atoi(qos);
@@ -236,7 +250,8 @@ client(int type, const char *url, const char *qos, const char *topic, const char
 	sqlite_config(&sock, MQTT_PROTOCOL_VERSION_v311);
 #endif
 
-     printf("terminou o envio\n");   	
+     printf("terminou o envio\n");
+	 printf("Time taken to connect: %.9f seconds\n", time_connection);   	
 	//nng_msleep(0);
 	nng_close(sock);//aqui demora um pouco pois ele está desalocando os recursos
 	fprintf(stderr, "Done.\n");
@@ -260,6 +275,7 @@ int main(int argc, char **argv) {
 	
     //client(PUB, argv[1], argv[2], argv[3], argv[4], argv[5]);
 	client(PUB, argv[1], argv[2], argv[3], argv[4], argv[5]);
+	//printf("Time taken to connect: %.9f seconds\n", time_connection);
     
     return 0;
 

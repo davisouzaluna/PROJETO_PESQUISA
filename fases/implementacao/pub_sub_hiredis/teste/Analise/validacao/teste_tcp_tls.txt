@@ -1,4 +1,9 @@
 
+Observações:
+
+* O tempo de 50 milisegundos
+* O tamanho do pacote pode ser estudado usando o wireshark com os pacotes obtidos com tcpdump
+
 
 
 Teste 1 com MQTT/TCP:
@@ -17,10 +22,10 @@ tcpdump -ni enp0s3 port 1883 -w 1kpackets_tcp_50ms.pcap
 	
 
 No publisher:
-./publisher mqtt-tcp://10.35.5.57:1883 0 1000_packets_50ms_tcp 1000 50
+./publisher mqtt-tcp://192.168.56.102:1883 0 1000_packets_50ms_tcp 50 1000
 
 	No subscriber:
-./sub sub "mqtt-tcp://10.35.5.57:1883" 0 1000_packets_50ms_tcp 1000_packets_50ms_tcp
+./sub sub "mqtt-tcp://192.168.56.102:1883" 0 1000_packets_50ms_tcp 1000_packets_50ms_tcp
 
 
 
@@ -41,9 +46,20 @@ tcpdump -ni enp0s3 port 1883 -w 10kpackets_tcp_50ms.pcap
 	
 
 No publisher:
-./publisher mqtt-tcp://10.35.5.57:1883 0 10000_packets_50ms_tcp 10000 50
+./publisher mqtt-tcp://192.168.56.102:1883 0 10000_packets_50ms_tcp 50 10000
 
 	No subscriber:
-./sub sub "mqtt-tcp://10.35.5.57:1883" 0 10000_packets_50ms_quic 10000_packets_50ms_tcp
+./sub sub "mqtt-tcp://192.168.56.102:1883" 0 10000_packets_50ms_tcp 10000_packets_50ms_tcp
 
 
+
+
+
+
+
+
+
+
+Teste 3 com MQTT/TLS
+
+./tls -u tls++mqtt-tcp://192.168.56.102:8883 -t 1000_packets_50ms_tls

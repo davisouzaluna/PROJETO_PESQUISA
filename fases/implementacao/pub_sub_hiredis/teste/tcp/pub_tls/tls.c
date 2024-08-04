@@ -20,6 +20,7 @@
 #endif
 
 #define BILLION 1000000000
+double time_connection;
 
 void fatal(const char *msg, int rv)
 {
@@ -171,6 +172,8 @@ int tls_client(const char *url, uint8_t proto_ver, const char *ca, const char *c
         }
     }
 
+    
+
     nng_msg *msg;
     nng_mqtt_msg_alloc(&msg, 0);
     nng_mqtt_msg_set_packet_type(msg, NNG_MQTT_CONNECT);
@@ -192,10 +195,24 @@ int tls_client(const char *url, uint8_t proto_ver, const char *ca, const char *c
         fatal("init_dialer_tls", rv);
     }
 
+    // Marcar o início do tempo
+    struct timespec start_time, end_time;
+    clock_gettime(CLOCK_REALTIME, &start_time);
+    
     nng_dialer_set_ptr(dialer, NNG_OPT_MQTT_CONNMSG, msg);
     if ((rv = nng_dialer_start(dialer, NNG_FLAG_ALLOC)) != 0){
         fatal("nng_dialer_start", rv);
     }
+
+    clock_gettime(CLOCK_REALTIME, &end_time);
+
+    // Calcular a diferença
+    long seconds = end_time.tv_sec - start_time.tv_sec;
+    long nanoseconds = end_time.tv_nsec - start_time.tv_nsec;
+    double elapsed = seconds + nanoseconds*1e-9;
+    time_connection = elapsed;
+
+    printf("Time taken to connect: %.9f seconds\n", elapsed);
     
     pub_time_packets(sock, topic, qos, verbose, interval, num_packets);
     
@@ -318,6 +335,7 @@ int main(int argc, char const *argv[])
     uint32_t interval = 1000; //default interval is 1000 ms or 1 second
     uint32_t num_packets = 1; //default number of packets is 1
     bool verbose = false;
+    
 
 
     signal(SIGINT, intHandler);
@@ -383,6 +401,9 @@ int main(int argc, char const *argv[])
     if (tls_client(url, proto_ver, cafile, cert, key, key_psw, topic, qos, verbose, interval, num_packets) != 0) {
         fprintf(stderr, "Error: tls_client\n");
         return 1;
+    }else{
+        printf("TLS client connected successfully\n");
+        printf("Time taken to connect: %.9f seconds\n", time_connection);
     }
 
     return 0;
