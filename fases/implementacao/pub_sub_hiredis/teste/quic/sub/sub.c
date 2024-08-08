@@ -48,7 +48,7 @@ const char * g_redis_key; //chave padrao para salvar no redis
 const char * g_topic; //topico padrao para se inscrever
 const char * g_qos;
 int g_count = 0; //contador para saber se é uma possível reconexão(quando o callback de conectado for chamado novamente ele incrementa o valor em 1 e entra dentro de u if que se subscreve novamente no tópico)	
-const char * g_type;
+int g_type;
 
 conf_quic config_user = {
 	.tls = {
@@ -72,33 +72,6 @@ typedef struct {
     const char *value;
     const char *redis_key;
 } RedisParams;
-
-void* store_in_redis_async(void *params) {
-    RedisParams *redis_params = (RedisParams *)params;
-    store_in_redis(redis_params->value, redis_params->redis_key);
-    free(params); // Libera a memória alocada para os parametros
-    return NULL;
-}
-
-void store_in_redis_async_call(const char *value, const char *redis_key) {
-    pthread_t thread;
-    RedisParams *params = malloc(sizeof(RedisParams));
-    if (params == NULL) {
-        perror("Erro ao alocar memória para os parâmetros da thread");
-        exit(EXIT_FAILURE);
-    }
-    params->value = value;
-    params->redis_key = redis_key;
-
-    if (pthread_create(&thread, NULL, store_in_redis_async, params) != 0) {
-        perror("Erro ao criar a thread");
-        free(params); // Libera a memória alocada em caso de falha na criação da thread
-        exit(EXIT_FAILURE);
-    }
-
-    // opcional: Se não precisar esperar a thread terminar, você pode desanexá-la, por enquanto preferi deixar a thread rodando
-    pthread_detach(thread);
-}
 
 
 void store_in_redis(const char *value, const char *redis_key) {
@@ -131,6 +104,33 @@ void store_in_redis(const char *value, const char *redis_key) {
     redisFree(context);
 }
 
+
+void* store_in_redis_async(void *params) {
+    RedisParams *redis_params = (RedisParams *)params;
+    store_in_redis(redis_params->value, redis_params->redis_key);
+    free(params); // Libera a memória alocada para os parametros
+    return NULL;
+}
+
+void store_in_redis_async_call(const char *value, const char *redis_key) {
+    pthread_t thread;
+    RedisParams *params = malloc(sizeof(RedisParams));
+    if (params == NULL) {
+        perror("Erro ao alocar memória para os parâmetros da thread");
+        exit(EXIT_FAILURE);
+    }
+    params->value = value;
+    params->redis_key = redis_key;
+
+    if (pthread_create(&thread, NULL, store_in_redis_async, params) != 0) {
+        perror("Erro ao criar a thread");
+        free(params); // Libera a memória alocada em caso de falha na criação da thread
+        exit(EXIT_FAILURE);
+    }
+
+    // opcional: Se não precisar esperar a thread terminar, você pode desanexá-la, por enquanto preferi deixar a thread rodando
+    pthread_detach(thread);
+}
 
 static void
 fatal(const char *msg, int rv)
@@ -207,6 +207,9 @@ char *diferenca_para_varchar(long long diferenca) {
     return tempo_varchar;
 }
 
+
+
+
 static nng_msg *
 mqtt_msg_compose(int type, int qos, char *topic)
 {
@@ -240,6 +243,26 @@ mqtt_msg_compose(int type, int qos, char *topic)
 	return msg;
 }
 
+void subscription(nng_socket *sock, const char *topic, const char *qos) {
+	int q;
+	q =atoi(qos);
+    nng_msg *msg = mqtt_msg_compose(SUB, q, (char *)topic);
+    if (msg == NULL) {
+        printf("Failed to compose subscribe message.\n");
+        return;
+    }
+    int rv = nng_sendmsg(*sock, msg, NNG_FLAG_ALLOC);
+    if (rv != 0) {
+        printf("Failed to send subscribe message: %d\n", rv);
+		nng_msleep(1000);//esperar umm segundo para tentar novamente
+    } else {
+        //printf("Successfully subscribed to topic: %s\n", topic);
+    }
+	//return rv,msg;
+}
+
+
+
 static int
 connect_cb(void *rmsg, void * arg)
 {
@@ -258,6 +281,10 @@ connect_cb(void *rmsg, void * arg)
 static int
 disconnect_cb(void *rmsg, void * arg)
 {
+	printf("[Disconnected][%s]...\n", (char *)arg);
+	
+	return 0;
+	/*
 	static int retry_count = 0;
 	printf("[Disconnected][%s]...\n", (char *)arg);
 	return 0;
@@ -274,6 +301,7 @@ disconnect_cb(void *rmsg, void * arg)
     //subscription(g_sock, g_topic, g_qos);
 
     return 0;
+	*/
 }
 
 static int
@@ -312,22 +340,6 @@ msg_recv_cb(void *rmsg, void * arg)
 	store_in_redis_async_call(valor_redis, g_redis_key);
 	return 0;
 	
-}
-
-void subscription(nng_socket *sock, const char *topic, int qos) {
-    nng_msg *msg = mqtt_msg_compose(SUB, qos, (char *)topic);
-    if (msg == NULL) {
-        printf("Failed to compose subscribe message.\n");
-        return;
-    }
-    int rv = nng_sendmsg(*sock, msg, NNG_FLAG_ALLOC);
-    if (rv != 0) {
-        printf("Failed to send subscribe message: %d\n", rv);
-		nng_msleep(1000);//esperar umm segundo para tentar novamente
-    } else {
-        //printf("Successfully subscribed to topic: %s\n", topic);
-    }
-	return rv,msg;
 }
 
 
@@ -385,7 +397,7 @@ client(int type, const char *url, const char *qos, const char *topic, const char
         g_redis_key= redis_key; //aqui eu defino o valor da variavel global para que o callback possa acessar
 		msg = mqtt_msg_compose(CONN, 0, NULL);
 		nng_sendmsg(sock, msg, NNG_FLAG_ALLOC);
-		subscription(&sock, topic, q);
+		subscription(&sock, topic, qos);
 		printf("subscrito em : %s\n", topic);
 		
 			
@@ -409,7 +421,7 @@ client(int type, const char *url, const char *qos, const char *topic, const char
 			//subscription(&sock, topic, q);//chamada para o subscriber
 		}*/
 	}
-	nng_msleep(1000);
+	//nng_msleep(1000);
 	nng_close(sock);
 	fprintf(stderr, "Done.\n");
 
