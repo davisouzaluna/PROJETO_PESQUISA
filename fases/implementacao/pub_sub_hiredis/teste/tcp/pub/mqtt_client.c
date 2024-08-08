@@ -224,13 +224,14 @@ int main(const int argc, const char **argv) {
         if (interval_ms > 0) {
             nng_msleep(interval_ms); // Espera o intervalo especificado antes de publicar novamente
         }
+        printf("Time taken to connect: %.9f seconds\n", time_connection);
     }
     printf("Time taken to connect: %.9f seconds\n", time_connection);
 
     if ((rv = nng_close(sock)) != 0) {
         fatal("nng_close", rv);
     }
-
+    printf("Time taken to connect: %.9f seconds\n", time_connection);
     return 0;
 
 error:
