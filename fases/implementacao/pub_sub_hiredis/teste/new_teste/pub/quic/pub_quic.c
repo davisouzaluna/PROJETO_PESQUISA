@@ -16,7 +16,7 @@
 #ifndef CLOCK_REALTIME
 #define CLOCK_REALTIME 0
 #endif
-
+#define BILLION 1000000000
 static nng_socket *g_sock;
 
 #define CONN 1
@@ -24,6 +24,8 @@ static nng_socket *g_sock;
 
 struct timespec start_time, end_time;
 struct timespec start_time_pub, end_time_pub;
+long long start_publish_time;
+long long end_publish_time;
 double time_connection;
 
 conf_quic config_user = {
@@ -48,6 +50,11 @@ typedef struct {
     const char *value;
     const char *redis_key;
 } RedisParams;
+
+void fatal(const char *msg, int rv) {
+    fprintf(stderr, "%s: %s\n", msg, nng_strerror(rv));
+}
+
 
 void store_in_redis(const char *value, const char *redis_key) {
     redisContext *context = redisConnect("127.0.0.1", 6379);
@@ -143,12 +150,45 @@ static nng_msg *mqtt_msg_compose(int type, int qos, char *topic, char *payload) 
 
     return msg;
 }
+char *diferenca_para_varchar(long long diferenca) {
+    char *tempo_varchar = (char *)malloc(MAX_STR_LEN * sizeof(char));
+    if (tempo_varchar == NULL) {
+        perror("Erro ao alocar memória");
+        exit(EXIT_FAILURE);
+    }
+    snprintf(tempo_varchar, MAX_STR_LEN, "%lld.%09lld", diferenca / 1000000000LL, diferenca % 1000000000LL);
+    return tempo_varchar;
+}
 
-void publish(const char *topic, int q, int *msg_sent) {
+
+long long tempo_atual_nanossegundos() {
+    struct timespec tempo_atual;
+    clock_gettime(CLOCK_REALTIME, &tempo_atual);
+
+    // Converter segundos para nanossegundos e adicionar nanossegundos
+    return tempo_atual.tv_sec * BILLION + tempo_atual.tv_nsec;
+}
+
+
+int publish(const char *topic, int q, int *msg_sent) {
+	int rv;
     *msg_sent = 0;
-    char *byte_payload = "hehe"; // Usar uma função para gerar o payload se necessário
+    char *byte_payload = "hhhh"; // Usar uma função para gerar o payload se necessário
     nng_msg *msg = mqtt_msg_compose(PUB, q, (char *)topic, byte_payload);
-    nng_sendmsg(*g_sock, msg, NNG_FLAG_ALLOC);
+    //nng_sendmsg(*g_sock, msg, NNG_FLAG_ALLOC);
+
+	// Enviar a mensagem
+	// Marcar o início do tempo
+    start_publish_time = tempo_atual_nanossegundos();
+    // Enviar a mensagem
+    if ((rv = nng_sendmsg(*g_sock, msg, NNG_FLAG_NONBLOCK)) != 0) {
+        fatal("nng_sendmsg", rv);
+    } else{
+        end_publish_time = tempo_atual_nanossegundos();
+    }
+    
+
+    //store_in_redis_async_call(diff, g_redis_key);
 
     while (!(*msg_sent)) {
         nng_msleep(1); // Sleep for a short duration to avoid busy waiting
@@ -218,10 +258,13 @@ int client(int type, const char *url, const char *qos, const char *topic, const 
         sprintf(buf, "%.9f", diff_pub);
         printf("valor convertido: %s\n", buf);
 
-        // Salvar no Redis
-        store_in_redis_async_call(buf, redis_key);
 
-        printf("latencia do publisher: %.9f segundos\n", diff_pub);
+		const char *diff = diferenca_para_varchar(end_publish_time - start_publish_time);
+
+        // Salvar no Redis
+        store_in_redis_async_call(diff, redis_key);
+
+        printf("latencia do publisher: %.9s segundos\n", diff);
         nng_msleep(intervalo);
     }
 

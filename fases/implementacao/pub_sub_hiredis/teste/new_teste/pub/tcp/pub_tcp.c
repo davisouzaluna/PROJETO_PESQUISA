@@ -227,7 +227,7 @@ int client_publish(nng_socket sock, const char *topic, uint8_t qos, bool verbose
     nng_mqtt_msg_set_publish_retain(pubmsg, 0);
 
     // Gerar o timestamp atual e usá-lo como payload
-    char *valor_aleatorio = "hehe";
+    char *valor_aleatorio = "hhhh";
     nng_mqtt_msg_set_publish_payload(pubmsg, (uint8_t *)valor_aleatorio, strlen(valor_aleatorio));
 
 
