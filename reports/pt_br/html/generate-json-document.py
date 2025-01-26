@@ -24,7 +24,7 @@ def generate_documents_for_year(year_directory):
             print(f"Arquivo documents.json gerado para {year_directory}/{month}")
 
 # Diretório principal onde os diretórios dos anos estão localizados
-main_directory = "reports/pt_br"
+main_directory = "../"
 
 # Diretórios dos anos
 years_directories = [os.path.join(main_directory, year) for year in os.listdir(main_directory) if os.path.isdir(os.path.join(main_directory, year))]
