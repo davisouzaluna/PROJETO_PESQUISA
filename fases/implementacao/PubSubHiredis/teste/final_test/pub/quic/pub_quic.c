@@ -173,11 +173,11 @@ long long tempo_atual_nanossegundos() {
 int publish(const char *topic, int q, int *msg_sent) {
 	int rv;
     *msg_sent = 0;
-    char *byte_payload = "hhhh"; // Usar uma função para gerar o payload se necessário
+    char *byte_payload = "hhhh";
     nng_msg *msg = mqtt_msg_compose(PUB, q, (char *)topic, byte_payload);
     //nng_sendmsg(*g_sock, msg, NNG_FLAG_ALLOC);
 
-	// Enviar a mensagem
+	
 	// Marcar o início do tempo
     start_publish_time = tempo_atual_nanossegundos();
     // Enviar a mensagem
